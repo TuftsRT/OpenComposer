@@ -1,0 +1,6 @@
+---
+name: Job Script (CPU)
+category: Jobs
+icon: https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTDLOhtSEKPhXW6uhqj-ybQMdlLACZRRv8xwg&s
+description: |
+  This application generates a job script using only CPU.

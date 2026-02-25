@@ -1,0 +1,6 @@
+---
+name: Alphafold3
+category: Bioinformatics
+icon: https://github.com/google-deepmind/alphafold3/raw/main/docs/header.jpg
+description: |
+  This application generates a job script in Slurm.

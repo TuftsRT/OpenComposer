@@ -1,0 +1,6 @@
+---
+name: Job Script (GPU)
+category: Jobs
+icon: https://www.nvidia.com/content/dam/en-zz/Solutions/about-nvidia/logo-and-brand/02-nvidia-logo-color-grn-500x200-4c25-p@2x.png
+description: |
+  This application generates a job script using Nvidia GPU.
