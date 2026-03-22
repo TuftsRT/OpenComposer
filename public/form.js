@@ -1119,3 +1119,275 @@ ocForm.submitEffect = function(action) {
   return true;
 };
 
+// =============================================================================
+// Dynamic SLURM Resource Discovery — 2D partition+GPU lookups
+// Auto-activated only when data-* attributes are present on the partition select.
+// =============================================================================
+document.addEventListener('DOMContentLoaded', function() {
+  console.log('[OC-SLURM] DOMContentLoaded fired — checking for dynamic data attributes...');
+
+  const partitionSelect = document.getElementById('partition');
+  if (!partitionSelect) {
+    console.log('[OC-SLURM] No #partition element found — skipping dynamic discovery.');
+    return;
+  }
+
+  // Check if dynamic data attributes are present
+  const gpuOptionsJson  = partitionSelect.getAttribute('data-partition-gpu-options');
+  const coresJson       = partitionSelect.getAttribute('data-partition-gpu-max-cores');
+  const memoryJson      = partitionSelect.getAttribute('data-partition-gpu-max-memory');
+  const hoursJson       = partitionSelect.getAttribute('data-partition-max-hours');
+  const unavailJson     = partitionSelect.getAttribute('data-unavailable-gpus');
+  const gresMapJson     = partitionSelect.getAttribute('data-gres-map');
+
+  console.log('[OC-SLURM] data-partition-gpu-options present:', !!gpuOptionsJson);
+  console.log('[OC-SLURM] data-partition-gpu-max-cores present:', !!coresJson);
+  console.log('[OC-SLURM] data-partition-gpu-max-memory present:', !!memoryJson);
+  console.log('[OC-SLURM] data-partition-max-hours present:', !!hoursJson);
+  console.log('[OC-SLURM] data-unavailable-gpus present:', !!unavailJson);
+  console.log('[OC-SLURM] data-gres-map present:', !!gresMapJson);
+
+  // Only activate if we have dynamic data
+  if (!gpuOptionsJson) {
+    console.log('[OC-SLURM] No gpu-options data attribute — dynamic discovery NOT active (static form).');
+    return;
+  }
+
+  let gpuOptionsMap, coresMap, memoryMap, hoursMap, unavailMap, gresMap;
+  try {
+    gpuOptionsMap = JSON.parse(gpuOptionsJson);
+    coresMap      = coresJson ? JSON.parse(coresJson) : {};
+    memoryMap     = memoryJson ? JSON.parse(memoryJson) : {};
+    hoursMap      = hoursJson ? JSON.parse(hoursJson) : {};
+    unavailMap    = unavailJson ? JSON.parse(unavailJson) : {};
+    gresMap       = gresMapJson ? JSON.parse(gresMapJson) : {};
+    console.log('[OC-SLURM] Parsed all JSON data successfully.');
+  } catch (e) {
+    console.error('[OC-SLURM] Failed to parse SLURM discovery data:', e);
+    return;
+  }
+
+  console.log('[OC-SLURM] gpuOptionsMap partitions:', Object.keys(gpuOptionsMap));
+  console.log('[OC-SLURM] gpuOptionsMap:', gpuOptionsMap);
+  console.log('[OC-SLURM] coresMap:', coresMap);
+  console.log('[OC-SLURM] memoryMap (GB):', memoryMap);
+  console.log('[OC-SLURM] hoursMap:', hoursMap);
+  console.log('[OC-SLURM] unavailMap:', unavailMap);
+  console.log('[OC-SLURM] gresMap:', gresMap);
+
+  const gpuTypeSelect  = document.getElementById('gpu_type');
+  const coresInput     = document.getElementById('cores_memory_1');
+  const memoryInput    = document.getElementById('cores_memory_2');
+  const timeInput      = document.getElementById('time_1');
+
+  console.log('[OC-SLURM] DOM elements found — gpu_type:', !!gpuTypeSelect,
+    'cores_memory_1:', !!coresInput, 'cores_memory_2:', !!memoryInput, 'time_1:', !!timeInput);
+
+  // Repopulate GPU type options based on selected partition
+  ocForm.repopulateGpuTypes = function() {
+    if (!gpuTypeSelect) return;
+
+    const partition = partitionSelect.value;
+    const opts = gpuOptionsMap[partition] || gpuOptionsMap['all'] || [];
+
+    console.log('[OC-SLURM] repopulateGpuTypes() — partition:', partition,
+      '| GPU options for this partition:', opts.map(o => o[1]));
+
+    // Remember current selection
+    const currentValue = gpuTypeSelect.value;
+    const currentDataValue = gpuTypeSelect.options[gpuTypeSelect.selectedIndex]?.getAttribute('data-gpu-id');
+    console.log('[OC-SLURM]   previous gpu_type selection:', currentValue, '(gpu-id:', currentDataValue + ')');
+
+    // Clear existing options
+    gpuTypeSelect.innerHTML = '';
+
+    opts.forEach(function(opt, i) {
+      const label = opt[0];
+      const gpuId = opt[1]; // internal identifier like 'a100_40', 'h200', etc.
+      const gresInfo = gresMap[gpuId] || [gpuId, '']; // [slurm_gres_name, constraint]
+      // Append ':' to non-empty gres names so script template produces correct format:
+      // "a100:" + "1" → "gpu:a100:1" | "" + "1" → "gpu:1" (any)
+      const gresForScript = gresInfo[0] ? gresInfo[0] + ':' : '';
+      const option = document.createElement('option');
+      option.id = 'gpu_type_' + (i + 1);
+      option.value = label;
+      // data-value is a JSON array for script substitution: #{:gpu_type_1}=gres_name_with_colon, #{gpu_type_2}=constraint
+      option.setAttribute('data-value', JSON.stringify([gresForScript, gresInfo[1]]));
+      // data-gpu-id is the internal identifier for 2D resource lookups
+      option.setAttribute('data-gpu-id', gpuId);
+      option.textContent = label;
+      gpuTypeSelect.appendChild(option);
+      console.log('[OC-SLURM]   option:', label, '| gpu-id:', gpuId, '| gres-for-script:', JSON.stringify([gresForScript, gresInfo[1]]));
+    });
+
+    // Try to restore previous selection by gpu-id
+    let restored = false;
+    for (let i = 0; i < gpuTypeSelect.options.length; i++) {
+      if (gpuTypeSelect.options[i].getAttribute('data-gpu-id') === currentDataValue ||
+          gpuTypeSelect.options[i].value === currentValue) {
+        gpuTypeSelect.selectedIndex = i;
+        restored = true;
+        break;
+      }
+    }
+    if (!restored && gpuTypeSelect.options.length > 0) {
+      gpuTypeSelect.selectedIndex = 0;
+    }
+
+    const finalSelection = gpuTypeSelect.options[gpuTypeSelect.selectedIndex];
+    console.log('[OC-SLURM]   restored previous selection:', restored,
+      '| final selection:', finalSelection?.value, '(data-value:', finalSelection?.getAttribute('data-value') + ')');
+
+    // Show/hide GPU-related fields based on whether partition has GPUs
+    const gpuContainer = gpuTypeSelect.closest('.mb-3');
+    const gpusInput = document.getElementById('gpus');
+    const gpusContainer = gpusInput ? gpusInput.closest('.mb-3') : null;
+    const hasGpus = opts.length > 0 && !(opts.length === 1 && opts[0][1] === 'none');
+
+    console.log('[OC-SLURM]   partition hasGpus:', hasGpus, '| opts count:', opts.length);
+
+    if (gpuContainer) {
+      gpuContainer.style.display = hasGpus ? 'block' : 'none';
+    }
+    if (gpusContainer) {
+      gpusContainer.style.display = hasGpus ? 'block' : 'none';
+    }
+  };
+
+  // 2D lookup: update resource limits based on partition + GPU type
+  ocForm.updateResourceLimits = function() {
+    const partition = partitionSelect.value;
+    const gpuType = gpuTypeSelect ?
+      (gpuTypeSelect.options[gpuTypeSelect.selectedIndex]?.getAttribute('data-gpu-id') || 'any') :
+      'any';
+
+    console.log('[OC-SLURM] updateResourceLimits() — partition:', partition, '| gpuType:', gpuType);
+
+    // Helper: 2D lookup with fallback chain
+    function lookup2D(map, part, gpu, label) {
+      let source = '';
+      let val = null;
+      if (map[part] && map[part][gpu] !== undefined) {
+        val = map[part][gpu]; source = part + '+' + gpu;
+      } else if (map[part] && map[part]['any'] !== undefined) {
+        val = map[part]['any']; source = part + '+any';
+      } else if (map['all'] && map['all'][gpu] !== undefined) {
+        val = map['all'][gpu]; source = 'all+' + gpu;
+      } else if (map['all'] && map['all']['any'] !== undefined) {
+        val = map['all']['any']; source = 'all+any';
+      }
+      console.log('[OC-SLURM]   2D lookup', label + ':', val, '(from:', source || 'NOT FOUND' + ')');
+      return val;
+    }
+
+    // Update cores max
+    if (coresInput) {
+      const maxCores = lookup2D(coresMap, partition, gpuType, 'cores');
+      if (maxCores !== null) {
+        coresInput.setAttribute('max', maxCores);
+        const coresLabel = document.getElementById('label_cores_memory_1');
+        if (coresLabel) {
+          coresLabel.innerHTML = 'Number of cores (1 - ' + maxCores + ')';
+        }
+        if (parseInt(coresInput.value) > maxCores) {
+          console.log('[OC-SLURM]   clamping cores from', coresInput.value, 'to', maxCores);
+          coresInput.value = maxCores;
+        }
+      }
+    }
+
+    // Update memory max
+    if (memoryInput) {
+      const maxMem = lookup2D(memoryMap, partition, gpuType, 'memory');
+      if (maxMem !== null) {
+        memoryInput.setAttribute('max', maxMem);
+        const memLabel = document.getElementById('label_cores_memory_2');
+        if (memLabel) {
+          memLabel.innerHTML = 'Memory (up to ' + maxMem + 'GB)';
+        }
+        if (parseInt(memoryInput.value) > maxMem) {
+          console.log('[OC-SLURM]   clamping memory from', memoryInput.value, 'to', maxMem);
+          memoryInput.value = maxMem;
+        }
+      }
+    }
+
+    // Update time max
+    if (timeInput) {
+      const maxHours = hoursMap[partition] || hoursMap['all'];
+      console.log('[OC-SLURM]   hours lookup:', maxHours, '(from:', hoursMap[partition] !== undefined ? partition : 'all' + ')');
+      if (maxHours !== undefined) {
+        timeInput.setAttribute('max', maxHours);
+        const timeLabel = document.getElementById('label_time_1');
+        if (timeLabel) {
+          timeLabel.innerHTML = 'Max run time hours (0 - ' + maxHours + ')';
+        }
+        if (parseInt(timeInput.value) > maxHours) {
+          console.log('[OC-SLURM]   clamping hours from', timeInput.value, 'to', maxHours);
+          timeInput.value = maxHours;
+        }
+      }
+    }
+  };
+
+  // Show warning if selected GPU type has all nodes down/drained
+  ocForm.updateGpuAvailabilityWarning = function() {
+    // Remove existing warning
+    const existing = document.getElementById('oc-gpu-unavail-warning');
+    if (existing) existing.remove();
+
+    if (!gpuTypeSelect || Object.keys(unavailMap).length === 0) {
+      console.log('[OC-SLURM] updateGpuAvailabilityWarning() — no unavailable GPUs to check.');
+      return;
+    }
+
+    const gpuType = gpuTypeSelect.options[gpuTypeSelect.selectedIndex]?.getAttribute('data-gpu-id');
+    console.log('[OC-SLURM] updateGpuAvailabilityWarning() — checking gpuType:', gpuType,
+      '| is unavailable:', !!unavailMap[gpuType]);
+
+    if (!gpuType || !unavailMap[gpuType]) return;
+
+    console.log('[OC-SLURM]   SHOWING WARNING for', gpuType, '(' + unavailMap[gpuType] + ')');
+    const warning = document.createElement('div');
+    warning.id = 'oc-gpu-unavail-warning';
+    warning.className = 'alert alert-danger mt-2 mb-0 py-2 px-3';
+    warning.style.fontSize = '0.9em';
+    warning.innerHTML = '<strong>Warning:</strong> All <strong>' + unavailMap[gpuType] +
+      '</strong> nodes are currently down or draining. Your job may remain queued indefinitely.';
+    gpuTypeSelect.parentNode.appendChild(warning);
+  };
+
+  // Wire up event listeners — use setTimeout to run after OC's built-in 1D set-max directives
+  partitionSelect.addEventListener('change', function() {
+    console.log('[OC-SLURM] === PARTITION CHANGED to:', partitionSelect.value, '===');
+    setTimeout(function() {
+      ocForm.repopulateGpuTypes();
+      ocForm.updateResourceLimits();
+      ocForm.updateGpuAvailabilityWarning();
+    }, 0);
+  });
+
+  if (gpuTypeSelect) {
+    gpuTypeSelect.addEventListener('change', function() {
+      const sel = gpuTypeSelect.options[gpuTypeSelect.selectedIndex];
+      console.log('[OC-SLURM] === GPU TYPE CHANGED to:', sel?.value,
+        '| gpu-id:', sel?.getAttribute('data-gpu-id'),
+        '| gres data-value:', sel?.getAttribute('data-value'), '===');
+      setTimeout(function() {
+        ocForm.updateResourceLimits();
+        ocForm.updateGpuAvailabilityWarning();
+      }, 0);
+    });
+  }
+
+  // Initial run on page load
+  console.log('[OC-SLURM] Scheduling initial run (100ms)...');
+  setTimeout(function() {
+    console.log('[OC-SLURM] === INITIAL RUN ===');
+    ocForm.repopulateGpuTypes();
+    ocForm.updateResourceLimits();
+    ocForm.updateGpuAvailabilityWarning();
+    console.log('[OC-SLURM] === INITIAL RUN COMPLETE ===');
+  }, 100);
+});
+

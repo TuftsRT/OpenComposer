@@ -1,0 +1,160 @@
+<%-
+# Include SLURM discovery partial
+eval(ERB.new(File.read('./partials/slurm_discovery.erb'), trim_mode: '-').result(binding))
+
+# Helper: convert a Ruby array (possibly containing hashes) to a YAML flow sequence string.
+# e.g. ["gpu", "gpu", {"set-max-cores_memory_1"=>64}] => "[gpu, gpu, set-max-cores_memory_1: 64]"
+def to_yaml_flow(arr)
+  items = arr.map do |item|
+    if item.is_a?(Hash)
+      item.map { |k, v| "#{k}: #{v}" }.join(", ")
+    elsif item.is_a?(String) && item.match?(/[,\[\]{}:#&*?|>!'"%@`]/)
+      "\"#{item}\""
+    else
+      item.to_s
+    end
+  end
+  "[#{items.join(', ')}]"
+end
+
+# Build partition options with set-max-* directives (1D fallback)
+partition_options = generate_oc_partition_options(:gpu)
+
+# Build GPU type options
+gpu_options = generate_oc_gpu_options
+
+# Build data attribute JSON maps for 2D JS lookups
+cores_json   = @max_cores_by_partition_and_gpu.to_json
+memory_json  = memory_map_in_gb.to_json
+hours_json   = @max_hours_by_partition.to_json
+gpu_opts_json = @partition_options_map.to_json
+unavail_json  = unavailable_gpu_map.to_json
+
+# Fallback to static defaults if SLURM discovery failed
+if @dynamic_failed || partition_options.nil? || partition_options.empty?
+  partition_options = [
+    ['gpu', 'gpu',
+      {'set-label-cores_memory_1' => 'Number of cores (1 - 64)'},
+      {'set-max-cores_memory_1' => 64},
+      {'set-label-cores_memory_2' => 'Memory (up to 500GB)'},
+      {'set-max-cores_memory_2' => 500},
+      {'set-label-gpus' => 'Number of GPUs (1 - 8)'},
+      {'set-max-gpus' => 8},
+      {'set-label-time_1' => 'Max run time hours (0 - 168)'},
+      {'set-max-time_1' => 168}],
+    ['preempt', 'preempt',
+      {'set-label-cores_memory_1' => 'Number of cores (1 - 128)'},
+      {'set-max-cores_memory_1' => 128},
+      {'set-label-cores_memory_2' => 'Memory (up to 1000GB)'},
+      {'set-max-cores_memory_2' => 1000},
+      {'set-label-time_1' => 'Max run time hours (0 - 168)'},
+      {'set-max-time_1' => 168}]
+  ]
+  gpu_options = [
+    ['P100', 'p100'], ['A100', 'a100_40'], ['v100', 'v100'], ['T4', 't4'],
+    ['RTX 6000', 'rtx_6000'], ['RTX A6000', 'rtx_a6000'],
+    ['RTX 6000Ada', 'rtx_6000ada'], ['L40', 'l40'], ['L40s', 'l40s'],
+    ['H100', 'h100'], ['H200', 'h200']
+  ]
+end
+-%>
+---
+form:
+  partition:
+    widget: select
+    label: Partition
+<% if !@dynamic_failed -%>
+    data:
+      partition-gpu-max-cores: '<%= cores_json %>'
+      partition-gpu-max-memory: '<%= memory_json %>'
+      partition-max-hours: '<%= hours_json %>'
+      partition-gpu-options: '<%= gpu_opts_json %>'
+      unavailable-gpus: '<%= unavail_json %>'
+      gres-map: '<%= @gres_map.to_json %>'
+<% end -%>
+    options:
+<% partition_options.each do |opt| -%>
+      - <%= to_yaml_flow(opt) %>
+<% end -%>
+
+  cores_memory:
+    widget: number
+    label: [Number of cores, Memory]
+    size: 2
+    value: [1, 4]
+
+  gpu_type:
+    widget: select
+    label: GPU Arch
+<% if @dynamic_failed -%>
+    help: gpu partion only has p100 and a100
+<% else -%>
+    help: "Auto-detected GPU types from SLURM. Choose 'any' if you don't have a preference."
+<% end -%>
+    options:
+<% gpu_options.each do |opt| -%>
+      - <%= to_yaml_flow(opt) %>
+<% end -%>
+
+  gpus:
+    widget: number
+    label: Number of GPUs
+    value: 1
+    min: 1
+    max: 4
+    step: 1
+
+  time:
+    widget: number
+    label: [Max run time hours (0 - 24), Max run minutes (0 - 59)]
+    size: 2
+    value: [1, 0]
+    min: [0, 0]
+    max: [24, 59]
+    step: [1, 1]
+
+  show_advanced_option:
+    widget: checkbox
+    label:
+    options:
+      - ["Show advanced option", "", show-email, show-mail_option, show-array, show-log ]
+
+  array:
+    widget: number
+    label: [ Array Job (start index), Array Job (last index) ]
+    size: 2
+    indent: 1
+    min:  [0, 0]
+    help: Each job executed from an array job is assigned a task ID, which can be referenced in the shell script via the environment variable SLURM_ARRAY_TASK_ID.
+
+  mail_option:
+    label: Mail option
+    widget: checkbox
+    direction: horizontal
+    separator: ","
+    indent: 1
+    options:
+      - [ "Beginning of job execution", 'BEGIN',   enable-email ]
+      - [ "End of job execution",       'END',     enable-email ]
+      - [ "Fail of job",                'FAIL',    enable-email ]
+      - [ "When the job is requeued",   'REQUEUE', enable-email ]
+      - [ "All",                        'ALL',     enable-email ]
+
+  email:
+    widget: email
+    label:  Email
+    indent: 2
+
+script: |
+  #!/bin/bash
+  #SBATCH -p #{partition}
+  #SBATCH -N 1
+  #SBATCH -n #{cores_memory_1}
+  #SBATCH --mem #{cores_memory_2}G
+  #SBATCH -t #{time_1}:#{time_2}:00
+  #SBATCH --gres=gpu:#{:gpu_type_1}#{gpus}
+  #SBATCH --constraint=#{gpu_type_2}
+  #SBATCH --mail-user=#{email}
+  #SBATCH --mail-type=#{mail_option}
+  #SBATCH --error=%x-%J-%u.err
+  #SBATCH --output=%x-%J-%u.out

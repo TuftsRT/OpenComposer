@@ -262,12 +262,20 @@ helpers do
     end
   end
 
+  # Output data-* attributes from a value's 'data' hash.
+  def output_data_attrs(value)
+    return "" unless value.is_a?(Hash) && value.key?('data')
+    value['data'].map { |k, v| "data-#{k}=\"#{escape_html(v.to_s)}\"" }.join(" ")
+  end
+
   # Output a select widget.
   def output_select_html(key, value)
     return "" if value['options'].nil?
-    
+
+    data_attrs = output_data_attrs(value)
+    data_str = data_attrs.empty? ? "" : " #{data_attrs}"
     html = output_label_with_span_tag(key, value)
-    html += "<select tabindex=\"#{@table_index}\" id=\"#{key}\" name=\"#{key}\" class=\"form-select\" onchange=\"ocForm.updateValues('#{key}')\">\n"
+    html += "<select tabindex=\"#{@table_index}\" id=\"#{key}\" name=\"#{key}\" class=\"form-select\"#{data_str} onchange=\"ocForm.updateValues('#{key}')\">\n"
     @table_index += 1
     
     value['options'].each_with_index do |v, i|
