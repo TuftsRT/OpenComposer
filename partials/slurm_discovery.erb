@@ -345,7 +345,16 @@ def generate_oc_partition_options(mode = :gpu)
                when :gpu
                  @all_partitions.select { |p| !@detected_by_partition[p].empty? || !@a100_sizes_by_partition[p].empty? }
                when :cpu
-                 @user_partitions
+                 # Exclude GPU-only partitions (where every node has a GPU).
+                 # SLURM rejects CPU-only jobs on these (e.g. 'gpu', 'a100').
+                 # A partition has non-GPU nodes when 'none' appears in its
+                 # cores-by-gpu-type map; partitions missing that key are GPU-only.
+                 @user_partitions.reject { |p|
+                   is_gpu_partition = @all_partitions.include?(p)
+                   has_non_gpu_nodes = @max_cores_by_partition_and_gpu.key?(p) &&
+                                       @max_cores_by_partition_and_gpu[p].key?('none')
+                   is_gpu_partition && !has_non_gpu_nodes
+                 }
                else
                  @user_partitions
                end
