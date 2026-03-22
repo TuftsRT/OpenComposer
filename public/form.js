@@ -1364,6 +1364,7 @@ document.addEventListener('DOMContentLoaded', function() {
       ocForm.repopulateGpuTypes();
       ocForm.updateResourceLimits();
       ocForm.updateGpuAvailabilityWarning();
+      ocForm.updateValues('partition');
     }, 0);
   });
 
@@ -1376,6 +1377,7 @@ document.addEventListener('DOMContentLoaded', function() {
       setTimeout(function() {
         ocForm.updateResourceLimits();
         ocForm.updateGpuAvailabilityWarning();
+        ocForm.updateValues('gpu_type');
       }, 0);
     });
   }
@@ -1387,6 +1389,8 @@ document.addEventListener('DOMContentLoaded', function() {
     ocForm.repopulateGpuTypes();
     ocForm.updateResourceLimits();
     ocForm.updateGpuAvailabilityWarning();
+    // Re-render script content now that data-values have been corrected
+    ocForm.updateValues('gpu_type');
     console.log('[OC-SLURM] === INITIAL RUN COMPLETE ===');
   }, 100);
 });
