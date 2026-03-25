@@ -1,26 +1,32 @@
-<% if @job_id && @error_msg.nil? && @script_path.nil? %>
+<% if @script_path %>
+  <% script_link = "<a target=\"_blank\" href=\"#{@my_ood_url}/pun/sys/dashboard/files/fs#{File.dirname(@script_path)}\">#{@script_path}</a>" %>
+  <% if @login_node %>
+    <% script_link += " <a style=\"color: black; text-decoration: none; vertical-align: middle;\" target=\"_blank\" href=\"#{@my_ood_url}/pun/sys/shell/ssh/#{@login_node}/#{File.dirname(@script_path)}\"><i class=\"bi bi-terminal-fill fs-5\"></i></a>" %>
+  <% end %>
+  <% script_msg = "The script file is saved as #{script_link}." %>
+<% end %>
+
+<% if @job_id && @error_msg.nil? %>
   <div class="alert alert-success alert-dismissible mx-1 mb-0">
-    Job was successfully submitted (Job ID is <%= @job_id %>).
+    Job was successfully submitted (Job ID is <code><%= @job_id %></code>).
+    <%= script_msg %>
     <% if @conf.key?("clusters") && @conf["clusters"].size > 1 %>
-    Go to the <a href="./history?cluster=<%= @cluster_name %>">History page</a>.
+      Go to the <a href="./history?cluster=<%= @cluster_name %>">History page</a>.
     <% else %>
-    Go to the <a href="./history">History page</a>.
+      Go to the <a href="./history">History page</a>.
     <% end %>
     <button class="btn-close" data-bs-dismiss="alert"></button>
   </div>
-<% elsif !@error_msg.nil? %>
+
+<% elsif @error_msg %>
   <div class="alert alert-warning alert-dismissible mx-1 mb-0">
     Job submission failed. (<%= @error_msg %>)
     <button class="btn-close" data-bs-dismiss="alert"></button>
   </div>
-<% elsif !@script_path.nil? %>
+
+<% elsif @script_path %>
   <div class="alert alert-info alert-dismissible mx-1 mb-0">
-    Saved to the following path: <a target="_blank" href="<%= @my_ood_url %>/pun/sys/dashboard/files/fs<%= File.dirname(@script_path) %>"><%= @script_path %></a>
-    <% unless @login_node.nil? %>
-    <a style="color: black; text-decoration: none; vertical-align: middle;" target="_blank" href="<%= @my_ood_url %>/pun/sys/shell/ssh/<%= @login_node %>/<%= File.dirname(@script_path) %>">
-      <i class="bi bi-terminal-fill fs-5"></i>
-    </a>
-    <% end %>
+    <%= script_msg %>
     <button class="btn-close" data-bs-dismiss="alert"></button>
   </div>
 <% end %>
@@ -54,7 +60,7 @@
     <!-- Script Content Section -->
     <div class="col py-3 d-flex flex-column">
       <label id="label_<%= OC_SCRIPT_CONTENT %>" class="fw-semibold" for="<%= OC_SCRIPT_CONTENT %>"><%= @script_label %></label>
-      <textarea id="<%= OC_SCRIPT_CONTENT %>" name="<%= OC_SCRIPT_CONTENT %>" class="form-control mt-1 mb-3 flex-grow-1" tabindex="<%= @table_index %>" accesskey="s" oninput="ocForm.updateHeight(ocForm.scriptArea)" required>
+      <textarea id="<%= OC_SCRIPT_CONTENT %>" name="<%= OC_SCRIPT_CONTENT %>" class="form-control mt-1 mb-3 flex-grow-1" tabindex="<%= @table_index %>" accesskey="s" onchange="ocForm.markManuallyModified('script')" oninput="ocForm.updateHeight(ocForm.scriptArea); ocForm.storePreviousValue('<%= OC_SCRIPT_CONTENT %>')" required>
         (Something wrong)
       </textarea>
       <!-- Submit Button -->
@@ -72,7 +78,7 @@
               <div class="container-fluid">
                 <div class="row">
                   <div class="col">
-		    <textarea id="<%= SUBMIT_CONTENT %>" name="<%= SUBMIT_CONTENT %>" class="form-control flex-grow-1 w-100" rows="6" oninput="ocForm.updateHeight(ocForm.submitArea)">
+		    <textarea id="<%= SUBMIT_CONTENT %>" name="<%= SUBMIT_CONTENT %>" class="form-control flex-grow-1 w-100" rows="6" onchange="ocForm.markManuallyModified('submit')" oninput="ocForm.updateHeight(ocForm.submitArea); ocForm.storePreviousValue('<%= SUBMIT_CONTENT %>')">
 		      (Something Wrong)
 		    </textarea>
                   </div>
@@ -80,12 +86,12 @@
               </div>
             </div>
             <div class="modal-footer">
-		<button class="btn btn-secondary" data-bs-dismiss="modal" type="button">Close</button>
-		  <% if @form_action == "confirm" %>
-		  <button class="btn btn-primary" form="<%= SUBMIT_FORM %>" type="submit" form="main-form">Submit</button>
-		  <% elsif @form_action == "confirm-save" %>
-                  <button class="btn btn-primary" form="<%= SUBMIT_FORM %>" type="submit" form="main-form">Save</button>
-		  <% end %>
+              <button class="btn btn-secondary" data-bs-dismiss="modal" type="button">Close</button>
+              <% if @form_action == "confirm" %>
+		          <button class="btn btn-primary" form="<%= SUBMIT_FORM %>" type="submit">Submit</button>
+              <% elsif @form_action == "confirm-save" %>
+              <button class="btn btn-primary" form="<%= SUBMIT_FORM %>" type="submit">Save</button>
+              <% end %>
             </div>
           </div>
         </div>
@@ -93,6 +99,24 @@
     </div>
   </div>
 </form>
+<!-- Overwrite Warning Modal -->
+<div class="modal fade" id="<%= WARNING_MODAL %>" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h4 class="modal-title">Warning</h4>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="<%= WARNING_MESSAGE %>">
+      </div>
+      <div class="modal-footer">
+        <button id="<%= WARNING_MODAL_CANCEL %>" type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button id="<%= WARNING_MODAL_DISCARD %>" type="button" class="btn btn-danger" data-bs-dismiss="modal">Discard and continue</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 var ocForm = ocForm || {};
 ocForm.scriptArea = document.getElementById('<%= OC_SCRIPT_CONTENT %>');
@@ -105,24 +129,21 @@ ocForm.onceExec = function() {
 <%= @js["once"].chomp %>
 };
 
-// Initialize dynamic form widgets.
-ocForm.initDynamicWidget = function(fromId) {
-<%= @js["init_dw"].lines.map(&:chomp).sort.uniq.join("\n") %>
-};
-
 // Execute dynamic form widgets.
 ocForm.execDynamicWidget = function(fromId) {
-<%= @js["exec_dw"].chomp %>
-};
+  <%= @js["init_dw"].lines.map(&:chomp).sort.uniq.join("\n") %>
 
+  <%= @js["exec_dw"].chomp %>
+};
+ 
 // Update the script section.
 ocForm.updateScriptContents = function(selectedValues) {
-<%= @js["script"].chomp %>
+  <%= @js["script"].chomp %>
 };
 
 // Update the submit section.
 ocForm.updateSubmitContents = function(selectedValues) {
-<%= @js["submit"].chomp %>
+  <%= @js["submit"].chomp %>
 };
 
 // Check if a cache file exists.
@@ -157,39 +178,149 @@ document.addEventListener('keydown', function(event) {
   }
 });
 
-ocForm.isFirst = true;
+ocForm["scriptManuallyModified"] = false;
+ocForm["submitManuallyModified"] = false;
+ocForm.previousScript = ""
 ocForm.multiSelectDisabledIndexes = {};
-ocForm.updateValues = function(fromId) {
-  let scriptValues = [];
-  let submitValues = [];
-  ocForm.initDynamicWidget(fromId);
-  ocForm.execDynamicWidget(fromId);
+ocForm.previousValues = {};
+ocForm.previousRadioValues = {};
 
-  if (ocForm.isFirst) {
-    ocForm.isFirst = false;
-    ocForm.onceExec();
-    ocForm.updateScriptContents(scriptValues);
-    ocForm.updateSubmitContents(submitValues);
-    ocForm.scriptArea.value = ocForm.isScriptCache() ? ocForm.loadScriptCache() : Object.values(scriptValues).join('\n');
-    ocForm.submitArea.value = ocForm.isSubmitCache() ? ocForm.loadSubmitCache() : Object.values(submitValues).join('\n');
+// Save the current value of a form element before modification.
+ocForm.storePreviousValue = function(id) {
+  const element = document.getElementById(id);
+  if (!element) return;
+
+  if (element.type === "radio") {
+    let previous = ocForm.previousValues[element.name];
+    if (previous === undefined) {
+      const radios = document.querySelectorAll(`input[name="${element.name}"]`);
+      radios.forEach(r => {
+        if (r.defaultChecked) previous = r.id;
+      });
+    }
+
+    ocForm.previousValues[element.name] = element.id;
+    ocForm.previousRadioValues[element.name] = previous;
   }
   else {
-    ocForm.updateScriptContents(scriptValues);
-    ocForm.updateSubmitContents(submitValues);
-    ocForm.scriptArea.value = Object.values(scriptValues).join('\n');
-    ocForm.submitArea.value = Object.values(submitValues).join('\n')
+    ocForm.previousValues[id] = element.value;
+  }
+};
+
+// Save the current value of a form element before modification.
+ocForm.restorePreviousValue = function(id) {
+  const element = document.getElementById(id);
+  if (!element) return;
+
+  if (element.type === "radio") {
+    const prevId = ocForm.previousRadioValues[element.name];
+
+    if (prevId) {
+      const prev = document.getElementById(prevId);
+      if (prev) {
+        prev.checked = true;
+        ocForm.previousValues[element.name] = prevId;
+      }
+    }
+  }
+	else if (element.type === "checkbox") {
+    element.checked = !element.checked;
+  }
+  else {
+    if (ocForm.previousValues[id] !== undefined) {
+      element.value = ocForm.previousValues[id];
+    }
+  }
+};
+
+// Mark that the script/submit section was manually edited by the user.
+ocForm.markManuallyModified = function(content_type) {
+  if (content_type === "script") {
+    ocForm["scriptManuallyModified"] = <%= @script_overwrite_warning_enabled ? "true" : "false" %>;
+  }
+  else { // content_type is "submit"
+    ocForm["submitManuallyModified"] = <%= @submit_overwrite_warning_enabled ? "true" : "false" %>;
+  }
+};
+
+// Show the overwrite warning modal if the script was manually modified.
+// If the user chooses "Discard and continue", execute the provided callback (onDiscard).
+// content_type is "both", "script" or "submit"
+ocForm.confirmOverwrite = function(content_type, id, onDiscard) {
+  const types = content_type === "both" ? ["script", "submit"] : [content_type];
+  const modifiedKeys = types.map(t => t === "script" ? "scriptManuallyModified" : "submitManuallyModified");
+  const contentAreas = types.map(t => t === "script" ? ocForm.scriptArea : ocForm.submitArea);
+  const area = content_type === "both"
+             ? (ocForm["scriptManuallyModified"] && ocForm["submitManuallyModified"] ? "script and submit areas" :
+                ocForm["scriptManuallyModified"] ? "script area" :
+                ocForm["submitManuallyModified"] ? "submit area" :
+                "script and submit areas")
+             : (content_type === "script" ? "script area" : "submit area");
+  const element = document.getElementById(id);
+
+  if (modifiedKeys.every(k => !ocForm[k])) {
+    onDiscard();
+    return;
   }
 
-  // Add a newline if it is not the last one
-  //if (!ocForm.scriptArea.value.endsWith('\n')){
-  //  ocForm.scriptArea.value += '\n';
-  //}
-  //if (!ocForm.submitArea.value.endsWith('\n')){
-  //  ocForm.submitArea.value += '\n';
-  //}
+  if (!ocForm.overwriteModal) {
+    ocForm.overwriteModal = new bootstrap.Modal(document.getElementById('<%= WARNING_MODAL %>'));
+  }
+
+  document.getElementById('<%= WARNING_MESSAGE %>').textContent =
+    `Your manual changes in the ${area} will be discarded. Do you want to continue?`;
+
+  ocForm.overwriteModal.show();
+
+  document.getElementById('<%= WARNING_MODAL_CANCEL %>').onclick = () => {
+    ocForm.restorePreviousValue(id);
+
+    contentAreas.forEach(a => {
+      ocForm.restorePreviousValue(a.id);
+      ocForm.updateHeight(a);
+    });
+
+    ocForm.execDynamicWidget(id);
+    modifiedKeys.forEach(k => ocForm[k] = true);
+  };
+
+  document.getElementById('<%= WARNING_MODAL_DISCARD %>').onclick = () => {
+    modifiedKeys.forEach(k => ocForm[k] = false);
+    onDiscard();
+  };
+};
+ 
+// content_type is "both", "script" or "submit"
+ocForm.updateArea = function(content_type, id = null) {
+  let scriptValues = [];
+  let submitValues = [];
+
+  ocForm.execDynamicWidget(id);
+
+   if (content_type === "both" || content_type === "script") {
+    ocForm.updateScriptContents(scriptValues);
+    ocForm.scriptArea.value = Object.values(scriptValues).join('\n');
+    ocForm.updateHeight(ocForm.scriptArea);
+  }
+ 
+  if (content_type === "both" || content_type === "submit") {
+    ocForm.updateSubmitContents(submitValues);
+    ocForm.submitArea.value = Object.values(submitValues).join('\n');
+    ocForm.updateHeight(ocForm.submitArea);
+  }
+};
+
+window.onload = function() {
+  let scriptValues = [];
+  let submitValues = [];
+
+  ocForm.execDynamicWidget();
+  ocForm.onceExec();
+  ocForm.updateScriptContents(scriptValues);
+  ocForm.updateSubmitContents(submitValues);
+  ocForm.scriptArea.value = ocForm.isScriptCache() ? ocForm.loadScriptCache() : Object.values(scriptValues).join('\n');
+  ocForm.submitArea.value = ocForm.isSubmitCache() ? ocForm.loadSubmitCache() : Object.values(submitValues).join('\n');
   ocForm.updateHeight(ocForm.scriptArea);
   ocForm.updateHeight(ocForm.submitArea);
 };
-
-window.onload = ocForm.updateValues();
 </script>

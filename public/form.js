@@ -1,3 +1,4 @@
+
 // Adjust a textarea height based on the content.
 ocForm.updateHeight = function(area) {
   area.style.height = 'auto';
@@ -120,7 +121,7 @@ ocForm.handleKeyDown = function(event, id) {
     else if (event.key === 'Enter') {
       const input = ocForm.getSearchInput(id);
       if (input.value !== "") {
-	ocForm.addSelectedItem(id);
+        ocForm.addSelectedItem(id);
       }
       if (currentIndex >= 0) {
 	input.value = items[currentIndex].textContent;
@@ -190,32 +191,63 @@ ocForm.checkSubmitState = function(id) {
 }
 
 // Add a selected item to the display inputs.
-ocForm.addSelectedItem = function(id, updateValuesFlag = true) {
+ocForm.addSelectedItem = function(id) {
   const searchInput = ocForm.getSearchInput(id);
   const selectedItems = ocForm.getSelectedItems(id);
   const validSuggestions = ocForm.getValidSuggestions(id);
   const selectedText = searchInput.value;
-  const anchors = Array.from(selectedItems.getElementsByTagName('a'));
+  const scriptOverwriteFlag = searchInput.dataset.scriptFlag === "true";
+  const submitOverwriteFlag = searchInput.dataset.submitFlag === "true";
 
-  if (selectedText && validSuggestions.includes(selectedText)) {
+  const addBadge = () => {
     const badge = document.createElement('a');
     badge.href = "#";
-    badge.classList.add('badge', 'rounded-pill', 'bg-primary', 'p-2', 'text-white', 'text-decoration-none');
+    let bgColor, textColor;
+    if (scriptOverwriteFlag) {
+      bgColor = 'bg-primary';
+      textColor = 'text-color';
+    }
+    else if (submitOverwriteFlag) {
+      bgColor = 'bg-danger-subtle';
+      textColor = 'text-dark';
+    }
+    else {
+      bgColor = 'bg-warning';
+      textColor = 'text-dark';
+    }
+    badge.classList.add('badge', 'rounded-pill', bgColor, textColor, 'p-2', 'text-decoration-none');
+
     badge.textContent = selectedText;
+
     const validSuggestionItems = ocForm.validSuggestionItems(id);
+
     Array.from(validSuggestionItems).some(li => {
       if (li.textContent.trim() === selectedText) {
-	badge.setAttribute('data-value', li.getAttribute('data-value'));
-	return true; // Escape loop
+        badge.setAttribute('data-value', li.getAttribute('data-value'));
+        return true; // Escape loop
       }
     });
-    
-    badge.addEventListener('click', () => {
-      event.preventDefault(); // Prevent the page from wrapping
-      selectedItems.removeChild(badge);
-      ocForm.updateHiddenValues(id);
-      ocForm.checkSubmitState(id);
-      ocForm.updateValues(id);
+
+    badge.addEventListener('click', (event) => {
+      event.preventDefault();
+      const removeBadge = (contentType) => {
+        selectedItems.removeChild(badge);
+        ocForm.updateHiddenValues(id);
+        ocForm.checkSubmitState(id);
+        ocForm.updateArea(contentType, id);
+      };
+
+      if (!scriptOverwriteFlag && !submitOverwriteFlag) {
+        removeBadge();
+      }
+      else {
+        if (scriptOverwriteFlag) {
+          ocForm.confirmOverwrite('script', id,  () => removeBadge('script'));
+        }
+        else { // submitOverwriteFlag === true
+          ocForm.confirmOverwrite('submit', id,  () => removeBadge('submit'));
+        }
+      }
     });
 
     selectedItems.appendChild(badge);
@@ -223,9 +255,21 @@ ocForm.addSelectedItem = function(id, updateValuesFlag = true) {
     ocForm.checkSubmitState(id);
     searchInput.value = '';
     ocForm.updateAddButtonState(id, validSuggestions);
+    if (scriptOverwriteFlag) ocForm.updateArea('script', id);
+    if (submitOverwriteFlag) ocForm.updateArea('submit', id);
+  };
+
+  if (selectedText && validSuggestions.includes(selectedText)) {
+    const runAddBadge = () => addBadge();
     
-    if (updateValuesFlag) {
-      ocForm.updateValues(id);
+    if (!scriptOverwriteFlag && !submitOverwriteFlag) {
+      runAddBadge();
+    }
+    else if (scriptOverwriteFlag) {
+      ocForm.confirmOverwrite('script', id, runAddBadge);
+    }
+    else {
+      ocForm.confirmOverwrite('submit', id, runAddBadge);
     }
   }
 };
@@ -1052,7 +1096,7 @@ ocForm.setValue = function(key, num, widget, attr, value, fromId) {
     case 'multi_select':
       if (key !== fromId) {
         ocForm.getSearchInput(key).value = value;
-        ocForm.addSelectedItem(key, false);
+        ocForm.addSelectedItem(key);
       }
       break;
     case 'radio':
@@ -1078,7 +1122,6 @@ ocForm.setValue = function(key, num, widget, attr, value, fromId) {
 // Update the selected path in the file input.
 ocForm.updatePath = function(key) {
   document.getElementById(key).value = document.getElementById("oc-modal-data-" + key).dataset.path;
-  ocForm.updateValues(key);
 };
 
 // If a checkbox widget has `required: true` attribute and none are checked,
