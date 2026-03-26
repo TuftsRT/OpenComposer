@@ -62,7 +62,7 @@
       <label id="label_<%= OC_SCRIPT_CONTENT %>" class="fw-semibold" for="<%= OC_SCRIPT_CONTENT %>"><%= @script_label %></label>
       <div id="<%= OC_SCRIPT_CONTENT %>_editor" class="position-relative mt-1 mb-3 flex-grow-1">
         <pre id="<%= OC_SCRIPT_CONTENT %>_highlight_container" class="form-control mb-0" aria-hidden="true"><code id="<%= OC_SCRIPT_CONTENT %>_highlight" class="d-block"></code></pre>
-        <textarea id="<%= OC_SCRIPT_CONTENT %>" name="<%= OC_SCRIPT_CONTENT %>" class="form-control position-relative mb-0" tabindex="<%= @table_index %>" accesskey="s" onchange="ocForm.markManuallyModified('script')" oninput="ocForm.updateHeight(ocForm.scriptArea); ocForm.storePreviousValue('<%= OC_SCRIPT_CONTENT %>'); ocForm.syncScriptHighlight()" required>(Something wrong)</textarea>
+        <textarea id="<%= OC_SCRIPT_CONTENT %>" name="<%= OC_SCRIPT_CONTENT %>" class="form-control position-relative mb-0" tabindex="<%= @table_index %>" accesskey="s" spellcheck="false" onchange="ocForm.markManuallyModified('script')" oninput="ocForm.updateHeight(ocForm.scriptArea); ocForm.storePreviousValue('<%= OC_SCRIPT_CONTENT %>'); ocForm.syncScriptHighlight()" required>(Something wrong)</textarea>
       </div>
       <!-- Submit Button -->
       <% if @form_action == "confirm" || @form_action == "confirm-save" %>
@@ -81,7 +81,7 @@
                   <div class="col">
                     <div id="<%= SUBMIT_CONTENT %>_editor" class="position-relative w-100">
                       <pre id="<%= SUBMIT_CONTENT %>_highlight_container" class="form-control mb-0" aria-hidden="true"><code id="<%= SUBMIT_CONTENT %>_highlight" class="d-block"></code></pre>
-                      <textarea id="<%= SUBMIT_CONTENT %>" name="<%= SUBMIT_CONTENT %>" class="form-control position-relative mb-0 w-100" rows="6" onchange="ocForm.markManuallyModified('submit')" oninput="ocForm.updateHeight(ocForm.submitArea); ocForm.storePreviousValue('<%= SUBMIT_CONTENT %>'); ocForm.syncSubmitHighlight()">(Something Wrong)</textarea>
+                      <textarea id="<%= SUBMIT_CONTENT %>" name="<%= SUBMIT_CONTENT %>" class="form-control position-relative mb-0 w-100" rows="6" spellcheck="false" onchange="ocForm.markManuallyModified('submit')" oninput="ocForm.updateHeight(ocForm.submitArea); ocForm.storePreviousValue('<%= SUBMIT_CONTENT %>'); ocForm.syncSubmitHighlight()">(Something Wrong)</textarea>
                     </div>
                   </div>
                 </div>
@@ -125,6 +125,7 @@ ocForm.scriptArea = document.getElementById('<%= OC_SCRIPT_CONTENT %>');
 ocForm.scriptHighlightContainer = document.getElementById('<%= OC_SCRIPT_CONTENT %>_highlight_container');
 ocForm.scriptHighlight = document.getElementById('<%= OC_SCRIPT_CONTENT %>_highlight');
 ocForm.submitArea = document.getElementById('<%= SUBMIT_CONTENT %>');
+ocForm.submitHighlightContainer = document.getElementById('<%= SUBMIT_CONTENT %>_highlight_container');
 ocForm.submitHighlight = document.getElementById('<%= SUBMIT_CONTENT %>_highlight');
 </script>
 <script src="form.js"></script>
@@ -152,12 +153,25 @@ ocForm.updateSubmitContents = function(selectedValues) {
 };
 
 // Sync a textarea content to the corresponding highlight area.
+ocForm.decorateSchedulerDirectives = function(highlight) {
+  if (!highlight) return;
+
+  const directivePattern = /^(?:#(?:PJM|SBATCH|PBS)\b|#\$)/;
+  highlight.querySelectorAll('.hljs-comment').forEach((node) => {
+    if (directivePattern.test(node.textContent.trimStart())) {
+      node.classList.add('oc-scheduler-directive');
+    }
+  });
+};
+
+// Sync a textarea content to the corresponding highlight area.
 ocForm.syncHighlight = function(area, highlight) {
   if (!area || !highlight) return;
 
   highlight.textContent = area.value;
   highlight.removeAttribute('data-highlighted');
   hljs.highlightElement(highlight);
+  ocForm.decorateSchedulerDirectives(highlight);
 };
 
 // Sync the script textarea content to the highlight area.
