@@ -1,61 +1,15 @@
 <%-
-# Include SLURM discovery partial
+# Include SLURM discovery partial (provides helpers + dynamic resource data)
 eval(ERB.new(File.read('./partials/slurm_discovery.erb'), trim_mode: '-').result(binding))
 
-# Helper: convert a Ruby array (possibly containing hashes) to a YAML flow sequence string.
-# e.g. ["gpu", "gpu", {"set-max-cores_memory_1"=>64}] => "[gpu, gpu, set-max-cores_memory_1: 64]"
-def to_yaml_flow(arr)
-  items = arr.map do |item|
-    if item.is_a?(Hash)
-      item.map { |k, v| "#{k}: #{v}" }.join(", ")
-    elsif item.is_a?(String) && item.match?(/[,\[\]{}:#&*?|>!'"%@`]/)
-      "\"#{item}\""
-    else
-      item.to_s
-    end
-  end
-  "[#{items.join(', ')}]"
-end
-
-# Build partition options with set-max-* directives (1D fallback)
+# Build partition + GPU options; fall back to static defaults if SLURM discovery failed
 partition_options = generate_oc_partition_options(:gpu)
-
-# Build GPU type options
 gpu_options = generate_oc_gpu_options
+gpu_data = gpu_data_attributes
 
-# Build data attribute JSON maps for 2D JS lookups
-cores_json   = @max_cores_by_partition_and_gpu.to_json
-memory_json  = memory_map_in_gb.to_json
-hours_json   = @max_hours_by_partition.to_json
-gpu_opts_json = @partition_options_map.to_json
-unavail_json  = unavailable_gpu_map.to_json
-
-# Fallback to static defaults if SLURM discovery failed
 if @dynamic_failed || partition_options.nil? || partition_options.empty?
-  partition_options = [
-    ['gpu', 'gpu',
-      {'set-label-cores_memory_1' => 'Number of cores (1 - 64)'},
-      {'set-max-cores_memory_1' => 64},
-      {'set-label-cores_memory_2' => 'Memory (up to 500GB)'},
-      {'set-max-cores_memory_2' => 500},
-      {'set-label-gpus' => 'Number of GPUs (1 - 8)'},
-      {'set-max-gpus' => 8},
-      {'set-label-time_1' => 'Max run time hours (0 - 168)'},
-      {'set-max-time_1' => 168}],
-    ['preempt', 'preempt',
-      {'set-label-cores_memory_1' => 'Number of cores (1 - 128)'},
-      {'set-max-cores_memory_1' => 128},
-      {'set-label-cores_memory_2' => 'Memory (up to 1000GB)'},
-      {'set-max-cores_memory_2' => 1000},
-      {'set-label-time_1' => 'Max run time hours (0 - 168)'},
-      {'set-max-time_1' => 168}]
-  ]
-  gpu_options = [
-    ['P100', 'p100'], ['A100', 'a100_40'], ['v100', 'v100'], ['T4', 't4'],
-    ['RTX 6000', 'rtx_6000'], ['RTX A6000', 'rtx_a6000'],
-    ['RTX 6000Ada', 'rtx_6000ada'], ['L40', 'l40'], ['L40s', 'l40s'],
-    ['H100', 'h100'], ['H200', 'h200']
-  ]
+  partition_options = default_gpu_partition_options
+  gpu_options = default_gpu_type_options
 end
 -%>
 ---
@@ -65,12 +19,12 @@ form:
     label: Partition
 <% if !@dynamic_failed -%>
     data:
-      partition-gpu-max-cores: '<%= cores_json %>'
-      partition-gpu-max-memory: '<%= memory_json %>'
-      partition-max-hours: '<%= hours_json %>'
-      partition-gpu-options: '<%= gpu_opts_json %>'
-      unavailable-gpus: '<%= unavail_json %>'
-      gres-map: '<%= @gres_map.to_json %>'
+      partition-gpu-max-cores: '<%= gpu_data[:cores] %>'
+      partition-gpu-max-memory: '<%= gpu_data[:memory] %>'
+      partition-max-hours: '<%= gpu_data[:hours] %>'
+      partition-gpu-options: '<%= gpu_data[:gpu_options] %>'
+      unavailable-gpus: '<%= gpu_data[:unavailable] %>'
+      gres-map: '<%= gpu_data[:gres_map] %>'
 <% end -%>
     options:
 <% partition_options.each do |opt| -%>

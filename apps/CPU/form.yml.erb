@@ -1,58 +1,23 @@
 <%-
-# Include SLURM discovery partial
+# Include SLURM discovery partial (provides helpers + dynamic resource data)
 eval(ERB.new(File.read('./partials/slurm_discovery.erb'), trim_mode: '-').result(binding))
 
-# Helper: convert a Ruby array (possibly containing hashes) to a YAML flow sequence string.
-def to_yaml_flow(arr)
-  items = arr.map do |item|
-    if item.is_a?(Hash)
-      item.map { |k, v| "#{k}: #{v}" }.join(", ")
-    elsif item.is_a?(String) && item.match?(/[,\[\]{}:#&*?|>!'"%@`]/)
-      "\"#{item}\""
-    else
-      item.to_s
-    end
-  end
-  "[#{items.join(', ')}]"
-end
-
-# Build partition options using CPU mode (all user partitions, not just GPU-capable)
-partition_options = generate_oc_partition_options(:cpu)
-
-# Fallback to static defaults if SLURM discovery returned no partitions
+# Build partition options; fall back to static defaults if SLURM discovery returned nothing.
 # NOTE: Do NOT gate on @dynamic_failed — that flag tracks GPU detection,
 # which is irrelevant for CPU. Only check if partition_options came back empty.
-if partition_options.nil? || partition_options.empty?
-  partition_options = [
-    ['batch', 'batch',
-      {'set-label-cores_memory_1' => 'Number of cores (1 - 64)'},
-      {'set-max-cores_memory_1' => 64},
-      {'set-label-cores_memory_2' => 'Memory (up to 500GB)'},
-      {'set-max-cores_memory_2' => 500},
-      {'set-label-time_1' => 'Max run time hours (0 - 168)'},
-      {'set-max-time_1' => 168}],
-    ['largemem', 'largemem',
-      {'set-label-cores_memory_1' => 'Number of cores (1 - 72)'},
-      {'set-max-cores_memory_1' => 72},
-      {'set-label-cores_memory_2' => 'Memory (up to 1000GB)'},
-      {'set-max-cores_memory_2' => 1000},
-      {'set-label-time_1' => 'Max run time hours (0 - 168)'},
-      {'set-max-time_1' => 168}],
-    ['preempt', 'preempt',
-      {'set-label-cores_memory_1' => 'Number of cores (1 - 64)'},
-      {'set-max-cores_memory_1' => 64},
-      {'set-label-cores_memory_2' => 'Memory (up to 1500GB)'},
-      {'set-max-cores_memory_2' => 1500},
-      {'set-label-time_1' => 'Max run time hours (0 - 168)'},
-      {'set-max-time_1' => 168}]
-  ]
-end
+partition_options = generate_oc_partition_options(:cpu) || default_cpu_partition_options
+cpu_dynamic = !partition_options.empty?
+partition_options = default_cpu_partition_options unless cpu_dynamic
 -%>
 ---
 form:
   partition:
     widget: select
     label: Partition
+<% if cpu_dynamic -%>
+    data:
+      slurm-discovery: 'cpu'
+<% end -%>
     options:
 <% partition_options.each do |opt| -%>
       - <%= to_yaml_flow(opt) %>

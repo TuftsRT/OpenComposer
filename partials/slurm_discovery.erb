@@ -338,6 +338,93 @@ all_hours = @max_hours_by_partition.values
 # OpenComposer-format helpers
 # =============================================================================
 
+# Convert a Ruby array (possibly containing hashes) to a YAML flow sequence string.
+# e.g. ["gpu", "gpu", {"set-max-cores_memory_1"=>64}] => "[gpu, gpu, set-max-cores_memory_1: 64]"
+def to_yaml_flow(arr)
+  items = arr.map do |item|
+    if item.is_a?(Hash)
+      item.map { |k, v| "#{k}: #{v}" }.join(", ")
+    elsif item.is_a?(String) && item.match?(/[,\[\]{}:#&*?|>!'"%@`]/)
+      "\"#{item}\""
+    else
+      item.to_s
+    end
+  end
+  "[#{items.join(', ')}]"
+end
+
+# Static fallback partition options for CPU apps (when SLURM discovery fails)
+def default_cpu_partition_options
+  [
+    ['batch', 'batch',
+      {'set-label-cores_memory_1' => 'Number of cores (1 - 64)'},
+      {'set-max-cores_memory_1' => 64},
+      {'set-label-cores_memory_2' => 'Memory (up to 500GB)'},
+      {'set-max-cores_memory_2' => 500},
+      {'set-label-time_1' => 'Max run time hours (0 - 168)'},
+      {'set-max-time_1' => 168}],
+    ['largemem', 'largemem',
+      {'set-label-cores_memory_1' => 'Number of cores (1 - 72)'},
+      {'set-max-cores_memory_1' => 72},
+      {'set-label-cores_memory_2' => 'Memory (up to 1000GB)'},
+      {'set-max-cores_memory_2' => 1000},
+      {'set-label-time_1' => 'Max run time hours (0 - 168)'},
+      {'set-max-time_1' => 168}],
+    ['preempt', 'preempt',
+      {'set-label-cores_memory_1' => 'Number of cores (1 - 64)'},
+      {'set-max-cores_memory_1' => 64},
+      {'set-label-cores_memory_2' => 'Memory (up to 1500GB)'},
+      {'set-max-cores_memory_2' => 1500},
+      {'set-label-time_1' => 'Max run time hours (0 - 168)'},
+      {'set-max-time_1' => 168}]
+  ]
+end
+
+# Static fallback partition options for GPU apps (when SLURM discovery fails)
+def default_gpu_partition_options
+  [
+    ['gpu', 'gpu',
+      {'set-label-cores_memory_1' => 'Number of cores (1 - 64)'},
+      {'set-max-cores_memory_1' => 64},
+      {'set-label-cores_memory_2' => 'Memory (up to 500GB)'},
+      {'set-max-cores_memory_2' => 500},
+      {'set-label-gpus' => 'Number of GPUs (1 - 8)'},
+      {'set-max-gpus' => 8},
+      {'set-label-time_1' => 'Max run time hours (0 - 168)'},
+      {'set-max-time_1' => 168}],
+    ['preempt', 'preempt',
+      {'set-label-cores_memory_1' => 'Number of cores (1 - 128)'},
+      {'set-max-cores_memory_1' => 128},
+      {'set-label-cores_memory_2' => 'Memory (up to 1000GB)'},
+      {'set-max-cores_memory_2' => 1000},
+      {'set-label-time_1' => 'Max run time hours (0 - 168)'},
+      {'set-max-time_1' => 168}]
+  ]
+end
+
+# Static fallback GPU type options (when SLURM discovery fails)
+def default_gpu_type_options
+  [
+    ['P100', 'p100'], ['A100', 'a100_40'], ['v100', 'v100'], ['T4', 't4'],
+    ['RTX 6000', 'rtx_6000'], ['RTX A6000', 'rtx_a6000'],
+    ['RTX 6000Ada', 'rtx_6000ada'], ['L40', 'l40'], ['L40s', 'l40s'],
+    ['H100', 'h100'], ['H200', 'h200']
+  ]
+end
+
+# Build all GPU-related JSON data attribute strings for the partition select widget.
+# Returns a hash with keys: :cores, :memory, :hours, :gpu_options, :unavailable, :gres_map
+def gpu_data_attributes
+  {
+    cores:       @max_cores_by_partition_and_gpu.to_json,
+    memory:      memory_map_in_gb.to_json,
+    hours:       @max_hours_by_partition.to_json,
+    gpu_options: @partition_options_map.to_json,
+    unavailable: unavailable_gpu_map.to_json,
+    gres_map:    @gres_map.to_json
+  }
+end
+
 # Generate partition select options for OpenComposer form.yml format.
 # mode: :gpu (only GPU-capable partitions), :cpu (all), :all (everything)
 def generate_oc_partition_options(mode = :gpu)
@@ -463,8 +550,16 @@ rescue => e
   @gres_map  ||= {}
 
   # Define helper stubs so ERB doesn't fail
+  def to_yaml_flow(arr)
+    items = arr.map { |item| item.is_a?(Hash) ? item.map { |k, v| "#{k}: #{v}" }.join(", ") : item.to_s }
+    "[#{items.join(', ')}]"
+  end
   def generate_oc_partition_options(mode = :gpu); nil; end
   def generate_oc_gpu_options; [['any', 'any']]; end
+  def default_cpu_partition_options; []; end
+  def default_gpu_partition_options; []; end
+  def default_gpu_type_options; [['any', 'any']]; end
+  def gpu_data_attributes; { cores: '{}', memory: '{}', hours: '{}', gpu_options: '{}', unavailable: '{}', gres_map: '{}' }; end
   def unavailable_gpu_map; {}; end
   def memory_map_in_gb; {}; end
 end

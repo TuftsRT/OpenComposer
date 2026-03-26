@@ -1147,9 +1147,16 @@ document.addEventListener('DOMContentLoaded', function() {
   console.log('[OC-SLURM] data-unavailable-gpus present:', !!unavailJson);
   console.log('[OC-SLURM] data-gres-map present:', !!gresMapJson);
 
-  // Only activate if we have dynamic data
+  // Check if this is a CPU form with dynamic SLURM discovery
+  const slurmDiscovery = partitionSelect.getAttribute('data-slurm-discovery');
+  if (slurmDiscovery === 'cpu') {
+    console.log('[OC-SLURM] CPU form — dynamic SLURM discovery active (resource limits via set-max-* directives).');
+    return;
+  }
+
+  // Only activate GPU 2D JS if we have GPU data attributes
   if (!gpuOptionsJson) {
-    console.log('[OC-SLURM] No gpu-options data attribute — dynamic discovery NOT active (static form).');
+    console.log('[OC-SLURM] No dynamic data attributes found — using static fallback defaults.');
     return;
   }
 
