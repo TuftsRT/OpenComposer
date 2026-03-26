@@ -79,7 +79,10 @@
               <div class="container-fluid">
                 <div class="row">
                   <div class="col">
-                    <textarea id="<%= SUBMIT_CONTENT %>" name="<%= SUBMIT_CONTENT %>" class="form-control flex-grow-1 w-100" rows="6" onchange="ocForm.markManuallyModified('submit')" oninput="ocForm.updateHeight(ocForm.submitArea); ocForm.storePreviousValue('<%= SUBMIT_CONTENT %>')">(Something Wrong)</textarea>
+                    <div id="<%= SUBMIT_CONTENT %>_editor" class="position-relative w-100">
+                      <pre id="<%= SUBMIT_CONTENT %>_highlight_container" class="form-control mb-0" aria-hidden="true"><code id="<%= SUBMIT_CONTENT %>_highlight" class="d-block"></code></pre>
+                      <textarea id="<%= SUBMIT_CONTENT %>" name="<%= SUBMIT_CONTENT %>" class="form-control position-relative mb-0 w-100" rows="6" onchange="ocForm.markManuallyModified('submit')" oninput="ocForm.updateHeight(ocForm.submitArea); ocForm.storePreviousValue('<%= SUBMIT_CONTENT %>'); ocForm.syncSubmitHighlight()">(Something Wrong)</textarea>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -122,6 +125,7 @@ ocForm.scriptArea = document.getElementById('<%= OC_SCRIPT_CONTENT %>');
 ocForm.scriptHighlightContainer = document.getElementById('<%= OC_SCRIPT_CONTENT %>_highlight_container');
 ocForm.scriptHighlight = document.getElementById('<%= OC_SCRIPT_CONTENT %>_highlight');
 ocForm.submitArea = document.getElementById('<%= SUBMIT_CONTENT %>');
+ocForm.submitHighlight = document.getElementById('<%= SUBMIT_CONTENT %>_highlight');
 </script>
 <script src="form.js"></script>
 <script>
@@ -147,13 +151,23 @@ ocForm.updateSubmitContents = function(selectedValues) {
   <%= @js["submit"].chomp %>
 };
 
+// Sync a textarea content to the corresponding highlight area.
+ocForm.syncHighlight = function(area, highlight) {
+  if (!area || !highlight) return;
+
+  highlight.textContent = area.value;
+  highlight.removeAttribute('data-highlighted');
+  hljs.highlightElement(highlight);
+};
+
 // Sync the script textarea content to the highlight area.
 ocForm.syncScriptHighlight = function() {
-  if (!ocForm.scriptArea || !ocForm.scriptHighlight || !ocForm.scriptHighlightContainer) return;
+  ocForm.syncHighlight(ocForm.scriptArea, ocForm.scriptHighlight);
+};
 
-  ocForm.scriptHighlight.textContent = ocForm.scriptArea.value;
-  ocForm.scriptHighlight.removeAttribute('data-highlighted');
-  hljs.highlightElement(ocForm.scriptHighlight);
+// Sync the submit textarea content to the highlight area.
+ocForm.syncSubmitHighlight = function() {
+  ocForm.syncHighlight(ocForm.submitArea, ocForm.submitHighlight);
 };
 
 // Keep the highlight overlay visibility in sync with the textarea.
@@ -326,6 +340,7 @@ ocForm.updateArea = function(content_type, id = null) {
     ocForm.updateSubmitContents(submitValues);
     ocForm.submitArea.value = Object.values(submitValues).join('\n');
     ocForm.updateHeight(ocForm.submitArea);
+    ocForm.syncSubmitHighlight();
   }
 };
 
@@ -342,6 +357,7 @@ window.onload = function() {
   ocForm.updateHeight(ocForm.scriptArea);
   ocForm.updateHeight(ocForm.submitArea);
   ocForm.syncScriptHighlight();
+  ocForm.syncSubmitHighlight();
   ocForm.syncScriptHighlightVisibility();
 
   ocForm.scriptAreaObserver = new MutationObserver(() => {
