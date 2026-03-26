@@ -119,8 +119,8 @@ def create_conf
   conf["category_color"]          ||= "#5522BB"
   conf["description_color"]       ||= conf["category_color"]
   conf["form_color"]              ||= "#BFCFE7"
-  conf["non_script_color"]        ||= "#FFDB69"
-  conf["non_script_button_color"] ||= "#FFA000"
+  conf["non_script_color"]        ||= "#FFE28A"
+  conf["non_script_button_color"] ||= "#FFCD4F"
   conf["submit_color"]            ||= "#FFCCCC"
   conf["submit_button_color"]     ||= "#FFAAAA"
 
