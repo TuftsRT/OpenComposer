@@ -60,9 +60,10 @@
     <!-- Script Content Section -->
     <div class="col py-3 d-flex flex-column">
       <label id="label_<%= OC_SCRIPT_CONTENT %>" class="fw-semibold" for="<%= OC_SCRIPT_CONTENT %>"><%= @script_label %></label>
-      <textarea id="<%= OC_SCRIPT_CONTENT %>" name="<%= OC_SCRIPT_CONTENT %>" class="form-control mt-1 mb-3 flex-grow-1" tabindex="<%= @table_index %>" accesskey="s" onchange="ocForm.markManuallyModified('script')" oninput="ocForm.updateHeight(ocForm.scriptArea); ocForm.storePreviousValue('<%= OC_SCRIPT_CONTENT %>')" required>
-        (Something wrong)
-      </textarea>
+      <div id="<%= OC_SCRIPT_CONTENT %>_editor" class="position-relative mt-1 mb-3 flex-grow-1">
+        <pre id="<%= OC_SCRIPT_CONTENT %>_highlight_container" class="form-control mb-0" aria-hidden="true"><code id="<%= OC_SCRIPT_CONTENT %>_highlight" class="d-block"></code></pre>
+        <textarea id="<%= OC_SCRIPT_CONTENT %>" name="<%= OC_SCRIPT_CONTENT %>" class="form-control position-relative mb-0" tabindex="<%= @table_index %>" accesskey="s" onchange="ocForm.markManuallyModified('script')" oninput="ocForm.updateHeight(ocForm.scriptArea); ocForm.storePreviousValue('<%= OC_SCRIPT_CONTENT %>'); ocForm.syncScriptHighlight()" required>(Something wrong)</textarea>
+      </div>
       <!-- Submit Button -->
       <% if @form_action == "confirm" || @form_action == "confirm-save" %>
       <button class="btn btn-primary d-block w-100" id="<%= SUBMIT_BUTTON %>" type="button" data-bs-toggle="modal" data-bs-target="#modal-<%= SUBMIT_CONFIRM %>" tabindex="<%= @table_index + 1 %>">
@@ -78,9 +79,7 @@
               <div class="container-fluid">
                 <div class="row">
                   <div class="col">
-		    <textarea id="<%= SUBMIT_CONTENT %>" name="<%= SUBMIT_CONTENT %>" class="form-control flex-grow-1 w-100" rows="6" onchange="ocForm.markManuallyModified('submit')" oninput="ocForm.updateHeight(ocForm.submitArea); ocForm.storePreviousValue('<%= SUBMIT_CONTENT %>')">
-		      (Something Wrong)
-		    </textarea>
+                    <textarea id="<%= SUBMIT_CONTENT %>" name="<%= SUBMIT_CONTENT %>" class="form-control flex-grow-1 w-100" rows="6" onchange="ocForm.markManuallyModified('submit')" oninput="ocForm.updateHeight(ocForm.submitArea); ocForm.storePreviousValue('<%= SUBMIT_CONTENT %>')">(Something Wrong)</textarea>
                   </div>
                 </div>
               </div>
@@ -120,6 +119,8 @@
 <script>
 var ocForm = ocForm || {};
 ocForm.scriptArea = document.getElementById('<%= OC_SCRIPT_CONTENT %>');
+ocForm.scriptHighlightContainer = document.getElementById('<%= OC_SCRIPT_CONTENT %>_highlight_container');
+ocForm.scriptHighlight = document.getElementById('<%= OC_SCRIPT_CONTENT %>_highlight');
 ocForm.submitArea = document.getElementById('<%= SUBMIT_CONTENT %>');
 </script>
 <script src="form.js"></script>
@@ -144,6 +145,23 @@ ocForm.updateScriptContents = function(selectedValues) {
 // Update the submit section.
 ocForm.updateSubmitContents = function(selectedValues) {
   <%= @js["submit"].chomp %>
+};
+
+// Sync the script textarea content to the highlight area.
+ocForm.syncScriptHighlight = function() {
+  if (!ocForm.scriptArea || !ocForm.scriptHighlight || !ocForm.scriptHighlightContainer) return;
+
+  ocForm.scriptHighlight.textContent = ocForm.scriptArea.value;
+  ocForm.scriptHighlight.removeAttribute('data-highlighted');
+  hljs.highlightElement(ocForm.scriptHighlight);
+};
+
+// Keep the highlight overlay visibility in sync with the textarea.
+ocForm.syncScriptHighlightVisibility = function() {
+  if (!ocForm.scriptArea || !ocForm.scriptHighlightContainer) return;
+
+  const isHidden = getComputedStyle(ocForm.scriptArea).display === 'none';
+  ocForm.scriptHighlightContainer.style.display = isHidden ? 'none' : '';
 };
 
 // Check if a cache file exists.
@@ -297,10 +315,11 @@ ocForm.updateArea = function(content_type, id = null) {
 
   ocForm.execDynamicWidget(id);
 
-   if (content_type === "both" || content_type === "script") {
+  if (content_type === "both" || content_type === "script") {
     ocForm.updateScriptContents(scriptValues);
     ocForm.scriptArea.value = Object.values(scriptValues).join('\n');
     ocForm.updateHeight(ocForm.scriptArea);
+    ocForm.syncScriptHighlight();
   }
  
   if (content_type === "both" || content_type === "submit") {
@@ -322,5 +341,15 @@ window.onload = function() {
   ocForm.submitArea.value = ocForm.isSubmitCache() ? ocForm.loadSubmitCache() : Object.values(submitValues).join('\n');
   ocForm.updateHeight(ocForm.scriptArea);
   ocForm.updateHeight(ocForm.submitArea);
+  ocForm.syncScriptHighlight();
+  ocForm.syncScriptHighlightVisibility();
+
+  ocForm.scriptAreaObserver = new MutationObserver(() => {
+    ocForm.syncScriptHighlightVisibility();
+  });
+  ocForm.scriptAreaObserver.observe(ocForm.scriptArea, {
+    attributes: true,
+    attributeFilter: ['style', 'class', 'hidden']
+  });
 };
 </script>
