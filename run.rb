@@ -1,4 +1,5 @@
 require "sinatra"
+require "sinatra/reloader" if ENV.fetch("RACK_ENV", "production") == "development"
 require "yaml"
 require "erb"
 require "pstore"
@@ -8,36 +9,45 @@ require "./lib/form"
 require "./lib/history"
 require "./lib/scheduler"
 
-set :environment, :production
-#set :environment, :development
+set :environment, ENV.fetch("RACK_ENV", "production").to_sym
+set :host_authorization, { permitted_hosts: [] } if ENV.fetch("RACK_ENV", "production") == "development"
 set :erb, trim: "-"
 
+configure :development do
+  register Sinatra::Reloader
+  also_reload "./lib/**/*.rb"
+end
+
 # Internal Constants
-VERSION                = "1.9.0-dev"
-SCHEDULERS_DIR_PATH    = "./lib/schedulers"
-HISTORY_ROWS           = 10
-JOB_STATUS             = { "queued" => "QUEUED", "running" => "RUNNING", "completed" => "COMPLETED", "failed" => "FAILED" }
-JOB_ID                 = "id"
-JOB_APP_NAME           = "appName"
-JOB_DIR_NAME           = "appPath"
-JOB_STATUS_ID          = "status"
-HEADER_SCRIPT_LOCATION = "_script_location"
-HEADER_SCRIPT_NAME     = "_script_1"
-HEADER_JOB_NAME        = "_script_2"
-HEADER_CLUSTER_NAME    = "_cluster_name"
-OC_SCRIPT_CONTENT      = "_script_content"
-SCRIPT_CONTENT         = OC_SCRIPT_CONTENT  # Compatibility with previous versions
-FORM_LAYOUT            = "_form_layout"
-SUBMIT_BUTTON          = "_submitButton"
-SUBMIT_CONFIRM         = "_submitConfirm"
-SUBMIT_CONTENT         = "_submit_content"
-SUBMIT_FORM            = "_submit_form"
-JOB_NAME               = "Job Name"
-JOB_PARTITION          = "Partition"
-JOB_SUBMISSION_TIME    = "Submission Time"
-JOB_KEYS               = "job_keys"
-SKIP_KEYS = ['splat', OC_SCRIPT_CONTENT]
-DEFINED_KEYS = {
+VERSION                ||= "1.9.0"
+SCHEDULERS_DIR_PATH    ||= "./lib/schedulers"
+HISTORY_ROWS           ||= 10
+JOB_STATUS             ||= { "queued" => "QUEUED", "running" => "RUNNING", "completed" => "COMPLETED", "failed" => "FAILED" }
+JOB_ID                 ||= "id"
+JOB_APP_NAME           ||= "appName"
+JOB_DIR_NAME           ||= "appPath"
+JOB_STATUS_ID          ||= "status"
+HEADER_SCRIPT_LOCATION ||= "_script_location"
+HEADER_SCRIPT_NAME     ||= "_script_1"
+HEADER_JOB_NAME        ||= "_script_2"
+HEADER_CLUSTER_NAME    ||= "_cluster_name"
+OC_SCRIPT_CONTENT      ||= "_script_content"
+SCRIPT_CONTENT         ||= OC_SCRIPT_CONTENT  # Compatibility with previous versions
+FORM_LAYOUT            ||= "_form_layout"
+SUBMIT_BUTTON          ||= "_submitButton"
+SUBMIT_CONFIRM         ||= "_submitConfirm"
+SUBMIT_CONTENT         ||= "_submit_content"
+WARNING_MODAL          ||= "_warning_modal"
+WARNING_MODAL_CANCEL   ||= "_warning_cancel"
+WARNING_MODAL_DISCARD  ||= "_warning_discard"
+WARNING_MESSAGE        ||= "_warning_message"
+SUBMIT_FORM            ||= "_submit_form"
+JOB_NAME               ||= "Job Name"
+JOB_PARTITION          ||= "Partition"
+JOB_SUBMISSION_TIME    ||= "Submission Time"
+JOB_KEYS               ||= "job_keys"
+SKIP_KEYS ||= ['splat', OC_SCRIPT_CONTENT]
+DEFINED_KEYS ||= {
   JOB_APP_NAME           => 'OC_APP_NAME',
   JOB_DIR_NAME           => 'OC_DIR_NAME',
   HEADER_SCRIPT_LOCATION => 'OC_SCRIPT_LOCATION',
@@ -45,15 +55,15 @@ DEFINED_KEYS = {
   HEADER_JOB_NAME        => 'OC_JOB_NAME',
   HEADER_CLUSTER_NAME    => 'OC_CLUSTER_NAME'
 }.freeze
-HISTORY_KEY_MAP = {
+HISTORY_KEY_MAP ||= {
   "OC_HISTORY_JOB_NAME"        => JOB_NAME,
   "OC_HISTORY_PARTITION"       => JOB_PARTITION,
   "OC_HISTORY_SUBMISSION_TIME" => JOB_SUBMISSION_TIME
 }.freeze
-CLUSTERS_KEYS = ["scheduler", "login_node", "ssh_wrapper", "bin", "bin_overrides", "sge_root"].freeze
+CLUSTERS_KEYS ||= ["scheduler", "login_node", "ssh_wrapper", "bin", "bin_overrides", "sge_root"].freeze
 
 # Structure of manifest
-Manifest = Struct.new(:dirname, :name, :category, :description, :icon, :related_apps)
+Manifest ||= Struct.new(:dirname, :name, :category, :description, :icon, :related_apps)
 
 # Create a YAML or ERB file object. Give priority to ERB.
 # If the file does not exist, return nil.
@@ -99,16 +109,20 @@ def create_conf
   end
   
   # Set initial values if not defined
-  conf["data_dir"]          ||= ENV["HOME"] + "/composer"
-  conf["history"]           ||= HISTORY_KEY_MAP.keys
-  conf["footer"]            ||= "&nbsp;"
-  conf["thumbnail_width"]   ||= "100"
-  conf["navbar_color"]      ||= "#3D3B40"
-  conf["dropdown_color"]    ||= conf["navbar_color"]
-  conf["footer_color"]      ||= conf["navbar_color"]
-  conf["category_color"]    ||= "#5522BB"
-  conf["description_color"] ||= conf["category_color"]
-  conf["form_color"]        ||= "#BFCFE7"
+  conf["data_dir"]                ||= ENV["HOME"] + "/composer"
+  conf["history"]                 ||= HISTORY_KEY_MAP.keys
+  conf["footer"]                  ||= "&nbsp;"
+  conf["thumbnail_width"]         ||= "100"
+  conf["navbar_color"]            ||= "#3D3B40"
+  conf["dropdown_color"]          ||= conf["navbar_color"]
+  conf["footer_color"]            ||= conf["navbar_color"]
+  conf["category_color"]          ||= "#5522BB"
+  conf["description_color"]       ||= conf["category_color"]
+  conf["form_color"]              ||= "#BFCFE7"
+  conf["non_script_color"]        ||= "#FFDB69"
+  conf["non_script_button_color"] ||= "#FFA000"
+  conf["submit_color"]            ||= "#FFCCCC"
+  conf["submit_button_color"]     ||= "#FFAAAA"
 
   # Set the values for "clusters:" and "history_db"
   if conf.key?("clusters")
@@ -254,6 +268,25 @@ def get_form_action(body)
   end
 end
 
+# Determine whether to show the overwrite warning when script content will be regenerated.
+# Default: true
+def check_overwrite_warning?(content)
+  return true unless content.is_a?(Hash)
+
+  raw_value = content["overwrite_warning"]
+
+  return true if raw_value.nil?
+  return raw_value if [true, false].include?(raw_value)
+
+  if raw_value.is_a?(String)
+    normalized = raw_value.strip.downcase
+    return true if ["true", "1", "yes", "on"].include?(normalized)
+    return false if ["false", "0", "no", "off"].include?(normalized)
+  end
+
+  !!raw_value
+end
+
 # Create a website of Home, Application, and History.
 def show_website(job_id = nil, error_msg = nil, error_params = nil, script_path = nil)
   @conf          = create_conf
@@ -328,7 +361,19 @@ def show_website(job_id = nil, error_msg = nil, error_params = nil, script_path 
         @error_msg = e.message
         return erb :error
       end
+
+      # Check if the form key exists
+      ["form.yml", "form.yml.erb"].each do |name|
+        file = File.join(@apps_dir, @dir_name, name)
+        next unless File.exist?(file)
+        
+        halt 500, "In ./#{file}, \"form:\" must be defined." unless @body.key?("form")
+        halt 500, "In ./#{file}, \"form:\" must have a key." unless @body["form"]
+      end
+      
       @form_action = get_form_action(@body)
+      @script_overwrite_warning_enabled = check_overwrite_warning?(@body["script"])
+      @submit_overwrite_warning_enabled = check_overwrite_warning?(@body["submit"])
 
       # Since the widget name is used as a variable in Ruby, it should consist of only
       # alphanumeric characters and underscores, and numbers should not be used at the
@@ -666,6 +711,6 @@ post "/*" do
     # Output log
     output_log("Submit job", scheduler, cluster: cluster_name, job_ids: Array(job_id), app_dir: manifest["dirname"], app_name: manifest["name"], category: manifest["category"])
 
-    return show_website(job_id, error_msg, params)
+    return show_website(job_id, error_msg, params, script_path)
   end
 end
