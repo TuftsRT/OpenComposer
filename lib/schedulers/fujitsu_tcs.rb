@@ -11,13 +11,13 @@ class Fujitsu_tcs < Scheduler
     stdout, stderr, status = Open3.capture3(command)
     return nil, [stdout, stderr].join(" ") unless status.success?
     return nil, "Job ID not found in output." unless stdout.match?(/Job (\d+) submitted/)
-    
+
     job_id = stdout.match(/Job (\d+) submitted/)[1]
     pjstat = get_command_path("pjstat", bin, bin_overrides)
     command = [ssh_wrapper, pjstat, "-E --data --choose=jid,jmdl", job_id].compact.join(" ")
     stdout, stderr, status = Open3.capture3(command)
     return nil, [stdout, stderr].join(" ") unless status.success?
-    
+
     # Example 1 : stdout of single job
     # ---
     # H,JOB_ID,MD
@@ -42,7 +42,7 @@ class Fujitsu_tcs < Scheduler
   rescue Exception => e
     return nil, e.message
   end
-  
+
   # Cancel one or more jobs in the Fujitsu TCS scheduler using the 'pjdel' command.
   def cancel(jobs, bin = nil, bin_overrides = nil, ssh_wrapper = nil)
     pjdel = get_command_path("pjdel", bin, bin_overrides)
@@ -127,7 +127,7 @@ class Fujitsu_tcs < Scheduler
       usctmut: "Total user CPU time and total of system CPU time (ms)",
       vmszu:   "Maximal amount of virtual memory used"
     }
-    
+
     pjstat = get_command_path("pjstat", bin, bin_overrides)
     command = [ssh_wrapper, pjstat, "-s -E --data --choose=#{fields.keys.join(",")}", jobs.join(" ")].compact.join(" ")
     stdout1, stderr1, status1 = Open3.capture3(command)

@@ -19,7 +19,7 @@ helpers do
                else
                  value['required'].to_s == "true"
                end
-    
+
     label = if label.nil? || label.empty?
               required ? "*" : ""
             elsif required
@@ -27,14 +27,14 @@ helpers do
             else
               label
             end
-    
+
     id = i.nil? ? key : "#{key}_#{i+1}"
     style = label.empty? ? "display: none;" : ""
-    
+
     # The values of data-label= and data-required= are used when changing the label with set-required of the dynamic form widget.
     return "<label id=\"label_#{id}\" style=\"#{style}\" class=\"fw-semibold form-label mb-1\" data-label=\"#{label}\" data-required=\"#{required}\" for=\"#{id}\">#{label}</label>\n"
   end
-  
+
   # Output a label with HTML span tags and an optional asterisk of label.
   def output_label_with_span_tag(key, value)
     label = if !value['label'].is_a?(Array)
@@ -42,7 +42,7 @@ helpers do
             else
               value['label'][0]
             end
-    
+
     required = value['required'].to_s == "true"
 
     label = if label.nil? || label.empty?
@@ -54,7 +54,7 @@ helpers do
             end
 
     style = label.empty? ? "display: none;" : ""
-    
+
     # The values of data-label= and data-required= are used when changing the label with set-required of the dynamic form widget.
     return "<div id=\"label_#{key}\" style=\"#{style}\" class=\"fw-semibold mb-1\" data-label=\"#{label}\" data-required=\"#{required}\">#{label}</div>\n"
   end
@@ -62,7 +62,7 @@ helpers do
   # Output attributes.
   def output_attribute(value, i, attr)
     return "" unless value.key?(attr)
-    
+
     attr_value = value[attr].is_a?(Array) ? value[attr][i] : value[attr]
     return "" if attr_value.nil? || attr_value == false || attr_value == ""
     attr == "required" ? " required " : " #{attr}=\"#{escape_html(attr_value)}\" "
@@ -77,7 +77,7 @@ helpers do
            else
              value['help']
            end
-    
+
     id = i.nil? ? key : "#{key}_#{i+1}"
     style = help.empty? ? "display: none;" : ""
     return "<p id=\"help_#{id}\" style=\"#{style}\" class=\"form-text mb-0\">#{help.to_s.chomp}</p>\n"
@@ -102,7 +102,7 @@ helpers do
         expr.match?(/\b:?#{Regexp.escape(k)}\b/)
       end
     end
-    
+
     flag_match = options&.any? do |opt|
       opt&.drop(2)&.any? do |v|
         (v.is_a?(String) && v.start_with?("disable-", "enable-")) ||
@@ -112,7 +112,7 @@ helpers do
 
     !!(expr_match || flag_match)
   end
-  
+
   # Output a number, text, or email widget.
   def output_number_text_email_html(key, value, script_content, submit_content, app_name, dir_name)
     size = value.key?('size') ? value['size'] : 1
@@ -120,7 +120,7 @@ helpers do
     if !value['label'].is_a?(Array) || value['label'].dig(1).is_a?(Array)
       html += output_label_with_span_tag(key, value)
     end
-    
+
     size.times do |i|
       id = value.key?('size') ? "#{key}_#{i+1}" : key
       if value['label'].is_a?(Array) || value['required'].is_a?(Array)
@@ -128,7 +128,7 @@ helpers do
         html += output_label_with_label_tag(key, value, i)
       else
         html += "<div class=\"col mt-0\">\n"
-      end      
+      end
       html += "<input type=\"#{value['widget']}\" autocomplete=\"off\" class=\"form-control\" tabindex=\"#{@table_index}\" id=\"#{id}\" name=\"#{id}\" "
       html += output_attribute(value, i, 'min')  if value['widget'] == "number"
       html += output_attribute(value, i, 'max')  if value['widget'] == "number"
@@ -156,9 +156,9 @@ helpers do
       html += "</div>\n"
       @table_index += 1
     end
-    
+
     html += output_help(key, value) unless value['help'].is_a?(Array)
-    
+
     return html + "</div>\n"
   end
 
@@ -191,12 +191,12 @@ helpers do
     s.gsub!(/#\{\s*(.*?)\s*\}/, '#{\1}')
     s
   end
-  
+
   # Substitute constant variables used in OC templates
   def substitute_oc_constants(str, app_name, dir_name)
     return str unless str
     s = str.dup
-    
+
     s.gsub!(/\#\{OC_APP_NAME\}/,         app_name)
     s.gsub!(/\#\{:OC_APP_NAME\}/,        app_name)
     s.gsub!(/\#\{OC_DIR_NAME\}/,         dir_name)
@@ -211,7 +211,7 @@ helpers do
     s.gsub!(/\#\{:OC_JOB_NAME\}/,        "\#\{:#{HEADER_JOB_NAME}\}")
     s
   end
-  
+
   # Escape string for embedding into JavaScript
   def escape_js_string(str)
     return str unless str
@@ -226,13 +226,13 @@ helpers do
     s.gsub!("'", "\\\\'")
     s
   end
-  
+
   # Output a JavaScript code based on a given yml, line in script, and matches data.
   def output_script_js(form, line, app_name, dir_name)
     line = normalize_interpolation(line)
     line = substitute_oc_constants(line, app_name, dir_name)
     line = escape_js_string(line)
-    
+
     matches = line.scan(/\#\{.+?\}/)
     return "  selectedValues.push(\'#{line}\');\n" if matches.empty?
 
@@ -241,12 +241,12 @@ helpers do
 
       if inner =~ /\A(?:zeropadding|calc|dirname|basename)\(/
         args = inner[/\((.*)\)/, 1] || "" # time_1 + time_2 - :time_3 * 2
- 
+
         if inner.start_with?("zeropadding(") && args.lstrip.start_with?("calc(")
           calc_args = args.lstrip[/calc\((.*)\)/, 1] || ""
           next calc_args.scan(/:[A-Za-z_]\w*|[A-Za-z_]\w*/)
         end
-        
+
         args.scan(/:[A-Za-z_]\w*|[A-Za-z_]\w*/) # ["time_1", "time_2", ":time_3"]
       else
         inner
@@ -263,14 +263,14 @@ helpers do
         calc_expr = Regexp.last_match(1)           # "time_1 * time_2"
         calc_expr = normalize_calc_args(calc_expr) # "time_1 * time_2, 0, OC_ROUNDING_ROUND"
         z_second_arg = Regexp.last_match(2).strip  # "2"
-  
+
         # Expand only inside calc(...)
         replaced_calc_expr = calc_expr.gsub(/(:)?([A-Za-z_]\w*)/) do
           colon = Regexp.last_match(1)
           name  = Regexp.last_match(2)
           wrap_ident(colon, name)
         end
-        
+
         next "\#{zeropadding(calc(#{replaced_calc_expr}), #{z_second_arg})}"
       end
 
@@ -295,7 +295,7 @@ helpers do
       else
         can_hide << "false"
       end
-      
+
       base_key, _, suffix = key.rpartition("_")
       if form.key?(key)
         exist_keys << key
@@ -322,7 +322,7 @@ helpers do
       return "  selectedValues.push('#{line}');\n"
     end
   end
-    
+
   # Output a select widget.
   def output_select_html(key, value, script_content, submit_content, app_name, dir_name)
     return "" if value['options'].nil?
@@ -347,9 +347,9 @@ helpers do
               "style=\"background-color: #{@conf["non_script_color"]};\""
     end
     html << ">\n"
-    
+
     @table_index += 1
-   
+
     value['options'].each_with_index do |v, i|
       # The data-value is used in Script Content (ocForm.getValue() in form.js)
       # If v[1] is not defined, v[0] is used instead.
@@ -359,14 +359,14 @@ helpers do
       escaped_item = escape_html(v[0])
       html += "<option id=\"#{key}_#{i+1}\" data-value='#{escaped_data}' value='#{escaped_item}' #{selected}>#{escaped_item}</option>\n"
     end
-    
-    html + "</select>\n" + output_help(key, value) 
+
+    html + "</select>\n" + output_help(key, value)
   end
 
   # Output a multi-select widget.
   def output_multi_select_html(key, value, script_content, submit_content, app_name, dir_name)
     return "" if value['options'].nil?
-    
+
     search_input_id      = key
     suggestions_list_id  = "suggestionsList_#{key}"
     add_button_id        = "addButton_#{key}"
@@ -407,7 +407,7 @@ helpers do
     <div id="#{hidden_values_id}"></div>
     HTML
     @table_index += 1
-    
+
     return html + output_help(key, value)
   end
 
@@ -422,14 +422,14 @@ helpers do
       js += "  ocForm.getSearchInput('#{key}').value = textarea.value;\n"
       js += "  ocForm.addSelectedItem('#{key}');\n"
     end
-    
+
     return js
   end
 
   # Output a radio widget.
   def output_radio_html(key, value, script_content, submit_content, app_name, dir_name)
     return "" if value['options'].nil?
-    
+
     is_horizontal = value['direction'] == "horizontal"
     required = value['required'].to_s == "true" ? "required" : ""
     html = output_label_with_span_tag(key, value)
@@ -470,7 +470,7 @@ helpers do
   # Output a checkbox widget.
   def output_checkbox_html(key, value, script_content, submit_content, app_name, dir_name)
     return "" if value['options'].nil?
-    
+
     is_horizontal = value['direction'] == "horizontal"
     html = output_label_with_span_tag(key, value)
     value['options'].each_with_index do |v, i|
@@ -514,7 +514,7 @@ helpers do
 
       @table_index += 1
     end
-    
+
     return html + output_help(key, value)
   end
 
@@ -523,7 +523,7 @@ helpers do
   def output_checkbox_js(key, value)
     return !value['required'].is_a?(Array) && value['required'].to_s == "true" ? "  ocForm.validateCheckboxForSubmit('#{key}');" : ""
   end
-  
+
   # Output a path widget.
   def output_path_html(key, value, script_content, submit_content, app_name, dir_name)
     favorites = value['favorites'] ? value['favorites'].select { |path| File.exist?(path) } : []
@@ -576,7 +576,7 @@ helpers do
                   <table class='table table-bordered table-hover table-sm mt-1'>
                     <tbody onclick="ocForm.handleRowClick(event, '#{key}', #{show_files}, '#{@script_name}', '#{Dir.home}')">
       HTML
-    
+
       favorites.each do |path|
         logo = File.file?(path) ? "&#x1f4c4;" : "&#x1F4C1;"
         html += "<tr><td class='text-center'>#{logo}</td><td><a href='#' data-path='#{path}' onclick=\"ocForm.loadFiles('#{@script_name}', '#{path}', '#{key}', #{show_files}, '#{Dir.home}', false);\">#{path}</a></td></tr>\n"
@@ -671,7 +671,7 @@ HTML
          (attr == "required" && ![true, false].include?(value))
         halt 500, "#{option} is invalid."
       end
-      
+
       form.each do |k, v|
         if key =~ /^set-#{attr}-#{k}$/
           elements.push({"attr" => attr, "key" => k, "value" => value})
@@ -696,10 +696,10 @@ HTML
     disable_elements = []
     enable_elements  = []
     return disable_elements, enable_elements if options.nil? || options.empty?
-    
+
     options.each do |option|
       next if option.is_a?(Hash) # Skip if the option is a Hash
-      
+
       form.each do |k, v|
         if option =~ /^disable-#{k}$/
           disable_elements.push({"key" => k})
@@ -720,7 +720,7 @@ HTML
                 disable_elements.push({"key" => k, "num" => i+1})
               end
             elsif option =~ /^enable-#{k}-#{_option[0]}/
-              if v["widget"] ==	"multi_select"
+              if v["widget"] == "multi_select"
                 enable_elements.push({"key" => k, "num" => i+1, "value" => _option[0]})
               else
                 enable_elements.push({"key" => k, "num" => i+1})
@@ -730,7 +730,7 @@ HTML
         end
       end
     end
-    
+
     return disable_elements, enable_elements
   end
 
@@ -739,7 +739,7 @@ HTML
   # For other widgets, it checks for a 'size' attribute.
   def get_target_size(target_key, form)
     widget = form[target_key]["widget"]
-    
+
     if ["radio", "checkbox"].include?(widget)
       return form[target_key]["options"].size
     elsif form[target_key].key?("size")
@@ -752,7 +752,7 @@ HTML
   # Output a JavaScript code to initialize disable of widgets.
   def output_init_dw_disable_js(options, form)
     js = ""
-    
+
     options.each do |option|
       disable_elements, enable_elements = get_oc_disable_attrs(option[2..-1], form)
       elements = disable_elements + enable_elements
@@ -763,7 +763,7 @@ HTML
         js  += "  ocForm.showWidget('#{e['key']}', '#{form[e['key']]['widget']}', #{size});\n" unless e.key?('num')
       end
     end
-    
+
     return js
   end
 
@@ -777,11 +777,11 @@ HTML
 
       options.each_with_index do |option, i|
         elements = is_disable ? get_oc_disable_attrs(option[2..-1], form).first : get_oc_disable_attrs(option[2..-1], form).last
-        
+
         elements.each do |e|
           check = is_disable ? 'ocForm.isElementChecked' : '!ocForm.isElementChecked'
           _key = e.key?('num') ? e['key'] + e['num'].to_s : e['key']
-          conditions_by_key[_key] << "#{check}(\"#{key}_#{i+1}\")" 
+          conditions_by_key[_key] << "#{check}(\"#{key}_#{i+1}\")"
           actions_by_key[_key] << {
             num:    e.key?('num') ? e['num'] : "null",
             widget: form[e['key']]['widget'],
@@ -790,7 +790,7 @@ HTML
           }
         end
       end
-      
+
       join_operator = is_disable ? ' || ' : ' && '
       conditions_by_key.each do |k, conditions|
         js += "  if(#{conditions.to_a.join(join_operator)}){\n"
@@ -808,7 +808,7 @@ HTML
 
     return js
   end
-  
+
   # Parse options to identify elements that should be hide or show.
   def get_oc_hide_attrs(options, form)
     hide_elements = []
@@ -817,7 +817,7 @@ HTML
 
     options.each do |option|
       next if option.is_a?(Hash)
-      
+
       form.each do |k, v|
         next unless form[k].is_a?(Hash)
         case option
@@ -828,7 +828,7 @@ HTML
         end
       end
     end
-    
+
     return hide_elements, show_elements
   end
 
@@ -843,7 +843,7 @@ HTML
         js += "  ocForm.showWidget('#{e['key']}', '#{form[e['key']]['widget']}', \"#{size}\");\n"
       end
     end
-    
+
     return js
   end
 
@@ -854,10 +854,10 @@ HTML
       is_hide = type == "hide"
       conditions_by_key = Hash.new { |hash, key| hash[key] = Set.new }
       actions_by_key    = Hash.new { |hash, key| hash[key] = Set.new }
-    
+
       options.each_with_index do |option, i|
         elements = is_hide ? get_oc_hide_attrs(option[2..-1], form).first : get_oc_hide_attrs(option[2..-1], form).last
-      
+
         elements.each do |e|
           check = is_hide ? 'ocForm.isElementChecked' : '!ocForm.isElementChecked'
           conditions_by_key[e['key']] << "#{check}(\"#{key}_#{i+1}\")"
@@ -867,7 +867,7 @@ HTML
           }
         end
       end
-    
+
       join_operator = is_hide ? ' || ' : ' && '
       conditions_by_key.each do |k, conditions|
         js += "  if(#{conditions.to_a.join(join_operator)}){\n"
@@ -877,10 +877,10 @@ HTML
         js += "  }\n"
       end
     end
-    
+
     return js
   end
-  
+
   # Output a JavaScript code to initialize widgets with specific attributes like label, value, etc.
   def output_init_dw_set_js(options, form)
     js = ""
@@ -891,7 +891,7 @@ HTML
       elements.each do |e|
         widget = form[e["key"]]["widget"]
         value  = form[e['key']][e['attr']]
-        
+
         if value.is_a?(Array) && !e['num'].nil?
           value = if e['attr'] == 'label' && value.dig(1).is_a?(Array)
                     value[1][e['num']-1]
@@ -920,7 +920,7 @@ HTML
         js += "  ocForm.setInitValue('#{e['key']}', '#{e['num']}', '#{widget}', '#{e['attr']}', '#{value}', fromId);\n"
       end
     end
-    
+
     return js
   end
 
@@ -930,7 +930,7 @@ HTML
     js  = output_init_dw_set_js(options, form)
     js += output_init_dw_disable_js(options, form)
     js += output_init_dw_hide_js(options, form)
-    
+
     return js
   end
 
@@ -942,7 +942,7 @@ HTML
       next if elements.empty?
 
       js += "  if(ocForm.isElementChecked('#{key}_#{i+1}')){\n"
-      
+
       elements.each do |e|
         widget = form[e["key"]]["widget"]
         if e['value'].is_a?(Array)
@@ -960,10 +960,10 @@ HTML
           js += "    ocForm.setValue('#{e['key']}', '#{e['num']}', '#{widget}', '#{e['attr']}', '#{e['value']}', fromId);\n"
         end
       end
-      
+
       js += "  }\n"
     end
-    
+
     return js
   end
 
@@ -973,7 +973,7 @@ HTML
     js  = output_exec_dw_set_js(key, options, form)
     js += output_exec_dw_disable_js(key, options, form)
     js += output_exec_dw_hide_js(key, options, form)
-    
+
     return js
   end
 
@@ -992,7 +992,7 @@ HTML
       next if key == OC_SCRIPT_CONTENT
       indent = add_indent_style(value)
       html  += "<div class=\"mb-3 position-relative\" style=\"#{indent}\">\n"
-      
+
       case value['widget']
       when 'number', 'text', 'email'
         html += output_number_text_email_html(key, value, script_content, submit_content, app_name, dir_name)
@@ -1015,7 +1015,7 @@ HTML
       when 'path'
         html += output_path_html(key, value, script_content, submit_content, app_name, dir_name)
       end
-      
+
       html += "</div>\n"
     end
 
@@ -1042,7 +1042,7 @@ HTML
     @js = {"init_dw" => "", "exec_dw" => "", "script" => "", "once" => "", "submit" => ""}
     script_content = body["script"].is_a?(Hash) ? body.dig("script", "content") : body["script"]
     submit_content = body["submit"].is_a?(Hash) ? body.dig("submit", "content") : body["submit"]
-    
+
     html = ""
     header = header.merge({OC_SCRIPT_CONTENT => {"widget" => "textarea"}})
     obj    = header.merge(body["form"])
@@ -1056,7 +1056,7 @@ HTML
         html += output_number_text_email_html(key, value, script_content, submit_content, app_name, dir_name)
       when 'select'
         @js["init_dw"] += output_init_dw_js(value["options"], obj)
-	@js["exec_dw"] += output_exec_dw_js(key, value["options"], obj)
+        @js["exec_dw"] += output_exec_dw_js(key, value["options"], obj)
         html += output_select_html(key, value, script_content, submit_content, app_name, dir_name)
       when 'multi_select'
         @js["once"] += output_multi_select_js(key, value, script_content, submit_content, app_name, dir_name)
@@ -1073,7 +1073,7 @@ HTML
       when 'path'
         html += output_path_html(key, value, script_content, submit_content, app_name, dir_name)
       end
-      
+
       html += "</div>\n"
     end
 

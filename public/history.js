@@ -8,7 +8,7 @@ ocHistory.applyFilter = function() {
   const filterText = filterInput.value;
   const urlParams = new URLSearchParams(window.location.search);
   urlParams.set('filter', filterText);
-  
+
   window.location.href = `${window.location.pathname}?${urlParams.toString()}`;
 };
 
@@ -37,7 +37,7 @@ ocHistory.updateStatusBatch = function(action, jobIds) {
   count.textContent = jobIds.length;
 
   // Update the modal content.
-  const jobCountText = jobIds.length === 1 
+  const jobCountText = jobIds.length === 1
     ? ` one ${action === 'CancelJob' ? 'job' : 'information'} (Job ID is ${jobIds[0]}) ?`
     : ` ${jobIds.length} ${action === 'CancelJob' ? 'jobs' : 'information'} ?`;
 

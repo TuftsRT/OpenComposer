@@ -48,7 +48,7 @@ class Scheduler
   # @return [String] the full path to the command if override exists, or the command name if not.
   def get_command_path(command, bin = nil, bin_overrides = nil)
     return bin_overrides[command] if bin_overrides&.key?(command)
-    
+
     if bin
       full_path = File.join(bin, command)
       return full_path if File.exist?(full_path)

@@ -19,7 +19,7 @@ helpers do
                       "<img width=20 title=\"#{name}\" alt=\"#{name}\" src=\"#{icon_path}\">"
                     end
       end
-      
+
       # Return the full HTML string for the link
       "<a style=\"color: black; text-decoration: none;\" target=\"_blank\" href=\"#{href}\">\n  #{icon_html}\n</a>\n"
     end
@@ -62,7 +62,7 @@ helpers do
 
     <<~HTML
     <button id="_history#{action}Badge" data-bs-toggle="modal" data-bs-target="#_history#{action}" class="btn btn-sm btn-danger disabled" disabled>
-      #{(action == "CancelJob") ? "Cancel Job" : "Delete Info"} 
+      #{(action == "CancelJob") ? "Cancel Job" : "Delete Info"}
       <span id="_history#{action}Count" class="badge bg-secondary">0</span>
     </button>
     HTML
@@ -186,7 +186,7 @@ helpers do
       next_link += "&filter=#{@filter}" if @filter && !@filter.empty?
       html += "   <li class=\"page-item\"><a href=\"#{next_link}\" class=\"page-link\">&raquo;</a></li>\n"
     end
-    
+
     html += "  </ul>\n"
     html += "</nav>\n"
   end
@@ -198,7 +198,7 @@ helpers do
 
     cluster_db = db[cluster_name]
     halt 500, "#{cluster_name} is invalid." unless cluster_db
-    
+
     return cluster_db
   end
 
@@ -233,7 +233,7 @@ helpers do
 
     return nil
   end
-  
+
   # Return all jobs that match the specified status and filter.
   def get_all_jobs(conf, cluster_name, status, filter)
     jobs = []
@@ -284,7 +284,7 @@ helpers do
                                else
                                  ["bg-info", "Unknown"]
                                end
-    
+
     "<span class=\"badge fs-6 #{badge_class}\">#{status_text}</span>\n"
   end
 
@@ -296,7 +296,7 @@ helpers do
              # If it is not replaced after escape, the replacement tag will be escaped.
              escape_html(text).gsub(/(#{Regexp.escape(filter)})/i, '<span class="bg-warning text-dark">\1</span>')
            end
-    
+
     return text.gsub("\n", "<br>")
   end
 end

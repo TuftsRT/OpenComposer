@@ -120,7 +120,7 @@ class Slurm < Scheduler
           end
         }
       end
-      
+
       # Add other fields
       header.each_with_index do |field, idx|
         value = job_fields[idx]
@@ -128,7 +128,7 @@ class Slurm < Scheduler
         info[id][field] = value
       end
     end
-    
+
     return info, nil
   rescue Exception => e
     return nil, e.message
