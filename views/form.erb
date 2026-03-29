@@ -164,6 +164,16 @@ ocForm.decorateSchedulerDirectives = function(highlight) {
   });
 };
 
+// Sync the caret color to the base text color of the highlighted code.
+ocForm.syncCaretColor = function(area, highlight) {
+  if (!area || !highlight) return;
+
+  const color = window.getComputedStyle(highlight).color;
+  if (color) {
+    area.style.caretColor = color;
+  }
+};
+
 // Sync a textarea content to the corresponding highlight area.
 ocForm.syncHighlight = function(area, highlight) {
   if (!area || !highlight) return;
@@ -172,6 +182,7 @@ ocForm.syncHighlight = function(area, highlight) {
   highlight.removeAttribute('data-highlighted');
   hljs.highlightElement(highlight);
   ocForm.decorateSchedulerDirectives(highlight);
+  ocForm.syncCaretColor(area, highlight);
 };
 
 // Sync the script textarea content to the highlight area.
