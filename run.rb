@@ -74,7 +74,7 @@ def read_yaml(yml_path)
   elsif File.exist?(yml_path)
     return YAML.load_file(yml_path)
   end
-  
+
   return nil
 end
 
@@ -107,7 +107,7 @@ def create_conf
       end
     end
   end
-  
+
   # Set initial values if not defined
   conf["data_dir"]                ||= ENV["HOME"] + "/composer"
   conf["history"]                 ||= HISTORY_KEY_MAP.keys
@@ -132,13 +132,13 @@ def create_conf
     defaults  = CLUSTERS_KEYS.to_h { |k| [k, conf[k]] }
     CLUSTERS_KEYS.each { |k| conf[k] = {} }
     conf["history_db"] = {}
-    
+
     clusters.each_key do |name|
       cluster_conf = clusters[name] || {}
       CLUSTERS_KEYS.each do |key|
         conf[key][name] = cluster_conf.fetch(key, defaults[key]) || defaults[key]
       end
-      
+
       conf["history_db"][name] = File.join(conf["data_dir"], "#{name}.db")
     end
   else
@@ -162,7 +162,7 @@ def create_manifest(app_path)
 
   ## Reject deprecated "related_app:" configuration in v1.8.0 and later
   halt 500, "In #{File.join(app_path, "manifest.yml")}, related_app: is deprecated." if manifest&.key?("related_app")
-  
+
   dirname = File.basename(app_path)
   return Manifest.new(dirname, dirname, nil, nil, nil, nil) if manifest.nil?
 
@@ -368,11 +368,11 @@ def show_website(job_id = nil, error_msg = nil, error_params = nil, script_path 
       ["form.yml", "form.yml.erb"].each do |name|
         file = File.join(@apps_dir, @dir_name, name)
         next unless File.exist?(file)
-        
+
         halt 500, "In ./#{file}, \"form:\" must be defined." unless @body.key?("form")
         halt 500, "In ./#{file}, \"form:\" must have a key." unless @body["form"]
       end
-      
+
       @form_action = get_form_action(@body)
       @script_overwrite_warning_enabled = check_overwrite_warning?(@body["script"])
       @submit_overwrite_warning_enabled = check_overwrite_warning?(@body["submit"])
@@ -516,7 +516,7 @@ get "/_files" do
     # When a non-existent directory is specified using the set-value statement of the dynamic form widget.
     entries = ""
   end
-  
+
   { files: entries }.to_json
 end
 
@@ -531,7 +531,7 @@ get "/_file_or_directory" do
     { type: "directory" }.to_json
   end
 end
-    
+
 get "/*" do
   show_website
 end
@@ -621,7 +621,7 @@ post "/*" do
         end
         widget = form["form"][key]&.dig("widget") || (base_key && form["form"][base_key]&.dig("widget"))
         next unless widget
-        
+
         if ["number"].include?(widget)
           set_check_value(key, value.to_f == value.to_i ? value.to_i : value.to_f)
         elsif ["text", "email", "path"].include?(widget)
@@ -659,7 +659,7 @@ post "/*" do
         return show_website(nil, e.message, params)
       end
     end
-    
+
     # Save a job script
     FileUtils.mkdir_p(script_location)
     File.open(script_path, "w") { |file| file.write(script_content) }
@@ -685,7 +685,7 @@ post "/*" do
       unless status.success?
         return show_website(nil, stderr, params)
       end
-      
+
       last_line = stdout.lines.last&.strip
       submit_options = (last_line == "__UNDEFINED__") ? nil : last_line
     end
@@ -695,7 +695,7 @@ post "/*" do
       output_log("Save job file", scheduler, cluster: cluster_name, app_dir: manifest["dirname"], app_name: manifest["name"], category: manifest["category"], script_path: script_path)
       return show_website(nil, nil, params, script_path)
     end
-    
+
     Dir.chdir(script_dir) do
       job_id, error_msg = scheduler.submit(script_path, escape_html(job_name.strip), submit_options, bin, bin_overrides, ssh_wrapper)
       params[JOB_SUBMISSION_TIME] = Time.now.strftime("%Y-%m-%d %H:%M:%S")

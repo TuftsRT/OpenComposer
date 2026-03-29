@@ -22,7 +22,7 @@
             <input type="text" class="form-control" aria-label="Filter" name="filter" value="<%= @filter %>" id="_filterInput">
           </div>
         </form>
-	<div class="d-flex justify-content-end">
+        <div class="d-flex justify-content-end">
           <div class="form-check form-check-inline">
             <input class="form-check-input" type="radio" name="_historyStatus" id="_historyStatusAll" value="all" <%= 'checked' if @status == 'all' %>>
             <label class="form-check-label" for="_historyStatusAll">All</label>
@@ -44,17 +44,17 @@
             <label class="form-check-label" for="_historyStatusFailed">Failed</label>
           </div>
         </div>
-	      <% if @conf.key?("clusters") && @conf["clusters"].size > 1 %>
+        <% if @conf.key?("clusters") && @conf["clusters"].size > 1 %>
           <div class="d-flex justify-content-end mt-1">
-	          <% @conf["clusters"].each_key.with_index do |name, index| %>
-	          <%   end_margin = index == @conf["clusters"].size - 1 ? "me-1" : "" %>
-	  <div class="form-check form-check-inline <%= end_margin %>">
-            <input class="form-check-input" type="radio" name="_historyCluster" id="_historyCluster_<%= name %>" value="<%= name %>" <%= 'checked' if @cluster_name == name %>>
-            <label class="form-check-label" for="_historyCluster_<%= name %>"><%= name %></label>
-	  </div>
-	  <% end %>
-        </div>
-      <% end %>
+            <% @conf["clusters"].each_key.with_index do |name, index| %>
+              <% end_margin = index == @conf["clusters"].size - 1 ? "me-1" : "" %>
+              <div class="form-check form-check-inline <%= end_margin %>">
+                <input class="form-check-input" type="radio" name="_historyCluster" id="_historyCluster_<%= name %>" value="<%= name %>" <%= 'checked' if @cluster_name == name %>>
+                <label class="form-check-label" for="_historyCluster_<%= name %>"><%= name %></label>
+              </div>
+            <% end %>
+          </div>
+        <% end %>
       </div>
     </div>
   </div>
@@ -96,22 +96,22 @@
               <a href="#" data-bs-toggle="modal" data-bs-target="#_historyJobId<%= job[JOB_ID] %>"><%= output_text(job[JOB_ID], @filter) %></a>
             </td>
             <td class="text-wrap text-break">
-	      <a href="<%= File.join(@script_name, job[JOB_DIR_NAME]) %>"><%= output_text(job[JOB_APP_NAME], @filter) %></a>
-	      <% directory_path = File.join(@apps_dir, job[JOB_DIR_NAME]) %>
-	      <% unless cached_related_apps.key?(directory_path) %>
-	      <%   cached_related_apps[directory_path] = output_related_apps_icon(job[JOB_DIR_NAME], create_manifest(directory_path)["related_apps"]) %>
-	      <% end %>
+              <a href="<%= File.join(@script_name, job[JOB_DIR_NAME]) %>"><%= output_text(job[JOB_APP_NAME], @filter) %></a>
+              <% directory_path = File.join(@apps_dir, job[JOB_DIR_NAME]) %>
+              <% unless cached_related_apps.key?(directory_path) %>
+              <%   cached_related_apps[directory_path] = output_related_apps_icon(job[JOB_DIR_NAME], create_manifest(directory_path)["related_apps"]) %>
+              <% end %>
               <% cached_related_apps[directory_path].each do |r| %>
-	              <%= r %>
+                <%= r %>
               <% end %>
             </td>
             <td class="text-wrap text-break">
               <a target="_blank" href="<%= @my_ood_url %>/pun/sys/dashboard/files/fs<%= job[HEADER_SCRIPT_LOCATION] %>"><%= output_text(job[HEADER_SCRIPT_LOCATION], @filter) %></a>
-	      <% unless @login_node.nil? %>
-	      <a style="color: black; text-decoration: none; vertical-align: middle;" target="_blank" href="<%= @my_ood_url %>/pun/sys/shell/ssh/<%= @login_node %>/<%= job[HEADER_SCRIPT_LOCATION] %>">
-          <i class="bi bi-terminal-fill fs-5"></i>
-        </a>
-	      <% end %>
+              <% unless @login_node.nil? %>
+                <a style="color: black; text-decoration: none; vertical-align: middle;" target="_blank" href="<%= @my_ood_url %>/pun/sys/shell/ssh/<%= @login_node %>/<%= job[HEADER_SCRIPT_LOCATION] %>">
+                  <i class="bi bi-terminal-fill fs-5"></i>
+                </a>
+              <% end %>
             </td>
             <td class="text-wrap text-break">
               <a href="#" data-bs-toggle="modal" data-bs-target="#_historyJobScript<%= job[JOB_ID] %>"><%= output_text(job[HEADER_SCRIPT_NAME], @filter) %></a>
@@ -129,11 +129,11 @@
     </table>
   </div>
 <% end %>
-  
+
 <div class="row mt-2 mx-1">
   <div class="col text-start">
     <div>Showing <%= @start_index + 1 %> to <%= @end_index + 1 %> of <%= @jobs_size %> entries</div>
-    <div>Show 
+    <div>Show
       <input type="number" id="_historyRows" value=<%= @rows %> style="width: 80px;" onkeydown="if(event.key === 'Enter') ocHistory.redirectWithRows()" >
       entries
     </div>

@@ -90,7 +90,7 @@
             <div class="modal-footer">
               <button class="btn btn-secondary" data-bs-dismiss="modal" type="button">Close</button>
               <% if @form_action == "confirm" %>
-		          <button class="btn btn-primary" form="<%= SUBMIT_FORM %>" type="submit">Submit</button>
+              <button class="btn btn-primary" form="<%= SUBMIT_FORM %>" type="submit">Submit</button>
               <% elsif @form_action == "confirm-save" %>
               <button class="btn btn-primary" form="<%= SUBMIT_FORM %>" type="submit">Save</button>
               <% end %>
@@ -141,7 +141,7 @@ ocForm.execDynamicWidget = function(fromId) {
 
   <%= @js["exec_dw"].chomp %>
 };
- 
+
 // Update the script section.
 ocForm.updateScriptContents = function(selectedValues) {
   <%= @js["script"].chomp %>
@@ -269,7 +269,7 @@ ocForm.restorePreviousValue = function(id) {
       }
     }
   }
-	else if (element.type === "checkbox") {
+  else if (element.type === "checkbox") {
     element.checked = !element.checked;
   }
   else {
@@ -335,7 +335,7 @@ ocForm.confirmOverwrite = function(content_type, id, onDiscard) {
     onDiscard();
   };
 };
- 
+
 // content_type is "both", "script" or "submit"
 ocForm.updateArea = function(content_type, id = null) {
   let scriptValues = [];
@@ -349,7 +349,7 @@ ocForm.updateArea = function(content_type, id = null) {
     ocForm.updateHeight(ocForm.scriptArea);
     ocForm.syncScriptHighlight();
   }
- 
+
   if (content_type === "both" || content_type === "submit") {
     ocForm.updateSubmitContents(submitValues);
     ocForm.submitArea.value = Object.values(submitValues).join('\n');

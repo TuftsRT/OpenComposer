@@ -23,7 +23,7 @@ supports multiple job schedulers and can be configured for different HPC applica
   - Customizable per-application headers and labels
   - Path selector widget for file and directory selection
   - Bilingual documentation (English and Japanese)
-									
+
 ## Screenshots
 
 ### Home page
