@@ -120,7 +120,7 @@ def create_conf
   conf["description_color"]       ||= conf["category_color"]
   conf["form_color"]              ||= "#BFCFE7"
   conf["non_script_color"]        ||= "#FFE28A"
-  conf["non_script_button_color"] ||= "#FFCD4F"
+  conf["non_script_button_color"] ||= "#FFBF00"
   conf["submit_color"]            ||= "#FFCCCC"
   conf["submit_button_color"]     ||= "#FFAAAA"
   conf["highlight_theme"]         ||= "vs"
