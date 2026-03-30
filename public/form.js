@@ -1,8 +1,19 @@
 
 // Adjust a textarea height based on the content.
 ocForm.updateHeight = function(area) {
-  area.style.height = 'auto';
+  if (!area) return;
+
+  if (!area.dataset.baseRows) {
+    area.dataset.baseRows = area.getAttribute('rows') || '2';
+  }
+
+  const computedStyle = window.getComputedStyle(area);
+  const lineHeight = parseFloat(computedStyle.lineHeight) || 24;
+  const minHeight = lineHeight * Number(area.dataset.baseRows);
+
   area.rows = area.value.split('\n').length;
+  area.style.height = 'auto';
+  area.style.height = `${Math.max(area.scrollHeight, minHeight)}px`;
 };
 
 // Return a valid suggestion items.
@@ -466,6 +477,10 @@ ocForm.showWidget = function(key, widget, size) {
     document.getElementById("label_" + key).style.display = 'block';
     document.getElementById('_form_layout').classList.add('row-cols-lg-2');
     document.getElementById("_form_container").style.removeProperty("max-width");
+
+    if (typeof ocForm.refreshEditorLayout === 'function') {
+      window.requestAnimationFrame(() => ocForm.refreshEditorLayout());
+    }
   }
   else {
     const parent = ocForm.getParentDiv(key, widget, size);
@@ -482,6 +497,10 @@ ocForm.hideWidget = function(key, widget, size) {
     document.getElementById("label_" + key).style.display = 'none';
     document.getElementById('_form_layout').classList.remove('row-cols-lg-2');
     document.getElementById("_form_container").style.maxWidth = '960px';
+
+    if (typeof ocForm.refreshEditorLayout === 'function') {
+      window.requestAnimationFrame(() => ocForm.refreshEditorLayout());
+    }
   }
   else {
     const parent = ocForm.getParentDiv(key, widget, size);

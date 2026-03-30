@@ -203,6 +203,14 @@ ocForm.syncScriptHighlightVisibility = function() {
   ocForm.scriptHighlightContainer.style.display = isHidden ? 'none' : '';
 };
 
+ocForm.refreshEditorLayout = function() {
+  ocForm.updateHeight(ocForm.scriptArea);
+  ocForm.updateHeight(ocForm.submitArea);
+  ocForm.syncScriptHighlight();
+  ocForm.syncSubmitHighlight();
+  ocForm.syncScriptHighlightVisibility();
+};
+
 // Check if a cache file exists.
 ocForm.isScriptCache = function() {
   return <%= @script_content != nil %>;
@@ -379,18 +387,18 @@ window.onload = function() {
   ocForm.updateSubmitContents(submitValues);
   ocForm.scriptArea.value = ocForm.isScriptCache() ? ocForm.loadScriptCache() : Object.values(scriptValues).join('\n');
   ocForm.submitArea.value = ocForm.isSubmitCache() ? ocForm.loadSubmitCache() : Object.values(submitValues).join('\n');
-  ocForm.updateHeight(ocForm.scriptArea);
-  ocForm.updateHeight(ocForm.submitArea);
-  ocForm.syncScriptHighlight();
-  ocForm.syncSubmitHighlight();
-  ocForm.syncScriptHighlightVisibility();
+  ocForm.refreshEditorLayout();
 
-  ocForm.scriptAreaObserver = new MutationObserver(() => {
-    ocForm.syncScriptHighlightVisibility();
+  window.addEventListener('resize', () => {
+    window.requestAnimationFrame(() => ocForm.refreshEditorLayout());
   });
-  ocForm.scriptAreaObserver.observe(ocForm.scriptArea, {
-    attributes: true,
-    attributeFilter: ['style', 'class', 'hidden']
-  });
+
+  const submitModal = document.getElementById('modal-<%= SUBMIT_CONFIRM %>');
+  if (submitModal) {
+    // The modal content size is finalized only after it is shown.
+    submitModal.addEventListener('shown.bs.modal', () => {
+      ocForm.refreshEditorLayout();
+    });
+  }
 };
 </script>
