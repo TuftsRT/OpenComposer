@@ -60,6 +60,10 @@ You can access the full documentation below:
   </tr>
 </table>
 
+Additional integration notes:
+
+- [Dynamic Slurm Options Guide](docs/slurm_dynamic_options.md)
+
 ### Quick start
 
 ```sh
