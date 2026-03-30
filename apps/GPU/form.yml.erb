@@ -21,6 +21,7 @@ form:
     data:
       partition-gpu-max-cores: '<%= gpu_data[:cores] %>'
       partition-gpu-max-memory: '<%= gpu_data[:memory] %>'
+      partition-gpu-max-gpus: '<%= gpu_data[:gpus] %>'
       partition-max-hours: '<%= gpu_data[:hours] %>'
       partition-gpu-options: '<%= gpu_data[:gpu_options] %>'
       unavailable-gpus: '<%= gpu_data[:unavailable] %>'
@@ -107,7 +108,7 @@ script: |
   #SBATCH --mem #{cores_memory_2}G
   #SBATCH -t #{time_1}:#{time_2}:00
   #SBATCH --gres=gpu:#{:gpu_type_1}#{gpus}
-  #SBATCH --constraint=#{gpu_type_2}
+  #{gpu_type_2}
   #SBATCH --mail-user=#{email}
   #SBATCH --mail-type=#{mail_option}
   #SBATCH --error=%x-%J-%u.err

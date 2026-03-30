@@ -1179,6 +1179,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const gpuOptionsJson  = partitionSelect.getAttribute('data-partition-gpu-options');
   const coresJson       = partitionSelect.getAttribute('data-partition-gpu-max-cores');
   const memoryJson      = partitionSelect.getAttribute('data-partition-gpu-max-memory');
+  const gpusJson        = partitionSelect.getAttribute('data-partition-gpu-max-gpus');
   const hoursJson       = partitionSelect.getAttribute('data-partition-max-hours');
   const unavailJson     = partitionSelect.getAttribute('data-unavailable-gpus');
   const gresMapJson     = partitionSelect.getAttribute('data-gres-map');
@@ -1186,6 +1187,7 @@ document.addEventListener('DOMContentLoaded', function() {
   console.log('[OC-SLURM] data-partition-gpu-options present:', !!gpuOptionsJson);
   console.log('[OC-SLURM] data-partition-gpu-max-cores present:', !!coresJson);
   console.log('[OC-SLURM] data-partition-gpu-max-memory present:', !!memoryJson);
+  console.log('[OC-SLURM] data-partition-gpu-max-gpus present:', !!gpusJson);
   console.log('[OC-SLURM] data-partition-max-hours present:', !!hoursJson);
   console.log('[OC-SLURM] data-unavailable-gpus present:', !!unavailJson);
   console.log('[OC-SLURM] data-gres-map present:', !!gresMapJson);
@@ -1203,11 +1205,12 @@ document.addEventListener('DOMContentLoaded', function() {
     return;
   }
 
-  let gpuOptionsMap, coresMap, memoryMap, hoursMap, unavailMap, gresMap;
+  let gpuOptionsMap, coresMap, memoryMap, gpusMap, hoursMap, unavailMap, gresMap;
   try {
     gpuOptionsMap = JSON.parse(gpuOptionsJson);
     coresMap      = coresJson ? JSON.parse(coresJson) : {};
     memoryMap     = memoryJson ? JSON.parse(memoryJson) : {};
+    gpusMap       = gpusJson ? JSON.parse(gpusJson) : {};
     hoursMap      = hoursJson ? JSON.parse(hoursJson) : {};
     unavailMap    = unavailJson ? JSON.parse(unavailJson) : {};
     gresMap       = gresMapJson ? JSON.parse(gresMapJson) : {};
@@ -1221,17 +1224,19 @@ document.addEventListener('DOMContentLoaded', function() {
   console.log('[OC-SLURM] gpuOptionsMap:', gpuOptionsMap);
   console.log('[OC-SLURM] coresMap:', coresMap);
   console.log('[OC-SLURM] memoryMap (GB):', memoryMap);
+  console.log('[OC-SLURM] gpusMap:', gpusMap);
   console.log('[OC-SLURM] hoursMap:', hoursMap);
   console.log('[OC-SLURM] unavailMap:', unavailMap);
   console.log('[OC-SLURM] gresMap:', gresMap);
 
   const gpuTypeSelect  = document.getElementById('gpu_type');
+  const gpusInput      = document.getElementById('gpus');
   const coresInput     = document.getElementById('cores_memory_1');
   const memoryInput    = document.getElementById('cores_memory_2');
   const timeInput      = document.getElementById('time_1');
 
   console.log('[OC-SLURM] DOM elements found — gpu_type:', !!gpuTypeSelect,
-    'cores_memory_1:', !!coresInput, 'cores_memory_2:', !!memoryInput, 'time_1:', !!timeInput);
+    'gpus:', !!gpusInput, 'cores_memory_1:', !!coresInput, 'cores_memory_2:', !!memoryInput, 'time_1:', !!timeInput);
 
   // Repopulate GPU type options based on selected partition
   ocForm.repopulateGpuTypes = function() {
@@ -1261,7 +1266,8 @@ document.addEventListener('DOMContentLoaded', function() {
       const option = document.createElement('option');
       option.id = 'gpu_type_' + (i + 1);
       option.value = label;
-      // data-value is a JSON array for script substitution: #{:gpu_type_1}=gres_name_with_colon, #{gpu_type_2}=constraint
+      // data-value is a JSON array for script substitution:
+      // #{:gpu_type_1}=gres_name_with_colon, #{gpu_type_2}=optional full SBATCH constraint line
       option.setAttribute('data-value', JSON.stringify([gresForScript, gresInfo[1]]));
       // data-gpu-id is the internal identifier for 2D resource lookups
       option.setAttribute('data-gpu-id', gpuId);
@@ -1290,7 +1296,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Show/hide GPU-related fields based on whether partition has GPUs
     const gpuContainer = gpuTypeSelect.closest('.mb-3');
-    const gpusInput = document.getElementById('gpus');
     const gpusContainer = gpusInput ? gpusInput.closest('.mb-3') : null;
     const hasGpus = opts.length > 0 && !(opts.length === 1 && opts[0][1] === 'none');
 
@@ -1358,6 +1363,22 @@ document.addEventListener('DOMContentLoaded', function() {
         if (parseInt(memoryInput.value) > maxMem) {
           console.log('[OC-SLURM]   clamping memory from', memoryInput.value, 'to', maxMem);
           memoryInput.value = maxMem;
+        }
+      }
+    }
+
+    // Update GPU count max
+    if (gpusInput) {
+      const maxGpus = lookup2D(gpusMap, partition, gpuType, 'gpus');
+      if (maxGpus !== null) {
+        gpusInput.setAttribute('max', maxGpus);
+        const gpusLabel = document.getElementById('label_gpus');
+        if (gpusLabel) {
+          gpusLabel.innerHTML = 'Number of GPUs (1 - ' + maxGpus + ')';
+        }
+        if (parseInt(gpusInput.value) > maxGpus) {
+          console.log('[OC-SLURM]   clamping gpus from', gpusInput.value, 'to', maxGpus);
+          gpusInput.value = maxGpus;
         }
       }
     }
@@ -1444,4 +1465,3 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('[OC-SLURM] === INITIAL RUN COMPLETE ===');
   }, 100);
 });
-
