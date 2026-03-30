@@ -44,31 +44,31 @@ $ sudo git clone https://github.com/RIKEN-RCCS/OpenComposer.git</pre>
 $ sudo cp conf.yml.erb.sample conf.yml.erb</pre>
 
 			<table class="table">
-				<tr><th>Item name</th><th>Setting</th></tr>
-				<tr><td>apps_dir</td><td>Application directory</td></tr>
-				<tr><td>scheduler</td><td>Job scheduler (<code>slurm</code>, <code>pbspro</code>, <code>sge</code>, <code>fujitsu_tcs</code>)</td></tr>
-				<tr><td>clusters</td><td>Cluster properties</td></tr>
-				<tr><td>data_dir</td><td>Directory where submitted job information is stored (Default is <code>${HOME}/composer</code>)</td></tr>
-				<tr><td>login_node</td><td>Login node when you launch the Open OnDemand web terminal</td></tr>
-				<tr><td>ssh_wrapper</td><td>Command for using the job scheduler of another node using SSH</td></tr>
-				<tr><td>bin</td><td>PATH of commands of job scheduler</td></tr>
-				<tr><td>bin_overrides</td><td>PATH of each command of job scheduler</td></tr>
-				<tr><td>sge_root</td><td>Directory for the Grid Engine root (<code>SGE_ROOT</code>)</td></tr>
-				<tr><td>history</td><td>Additional display fields on the history page</td></tr>
-				<tr><td>footer</td><td>Text in the footer</td></tr>
-				<tr><td>thumbnail_width</td><td>Width of thumbnails for each application on the home page</td></tr>
-				<tr><td>navbar_color</td><td>Color of navigation bar</td></tr>
+				<tr><th>Item name</th><th>Setting</th><th>Default value</th></tr>
+				<tr><td>apps_dir</td><td>Application directory</td><td>(None)</td></tr>
+				<tr><td>scheduler</td><td>Job scheduler (<code>slurm</code>, <code>pbspro</code>, <code>sge</code>, <code>fujitsu_tcs</code>)</td><td>(None)</td></tr>
+				<tr><td>clusters</td><td>Cluster properties</td><td>(None)</td></tr>
+				<tr><td>data_dir</td><td>Directory where submitted job information is stored</td><td><code>${HOME}/composer</code></td></tr>
+				<tr><td>login_node</td><td>Login node when you launch the Open OnDemand web terminal</td><td>(None)</td></tr>
+				<tr><td>ssh_wrapper</td><td>Command for using the job scheduler of another node using SSH</td><td>(None)</td></tr>
+				<tr><td>bin</td><td>PATH of commands of job scheduler</td><td>(None)</td></tr>
+				<tr><td>bin_overrides</td><td>PATH of each command of job scheduler</td><td>(None)</td></tr>
+				<tr><td>sge_root</td><td>Directory for the Grid Engine root (<code>SGE_ROOT</code>)</td><td>(None)</td></tr>
+				<tr><td>history</td><td>Additional display fields on the history page</td><td>(None)</td></tr>
+				<tr><td>footer</td><td>Text in the footer</td><td>(None)</td></tr>
+				<tr><td>thumbnail_width</td><td>Width of thumbnails for each application on the home page</td><td>100</td></tr>
+        <tr><td>highlight_theme</td><td>The theme name for <a target="_blank" href="https://highlightjs.org/">highlight.js</a> used in the <code>script</code>/<code>submit</code> sections</td><td>vs</td></tr>
+				<tr><td>navbar_color</td><td>Color of navigation bar</td><td rowspan="3" style="color: white; background-color: #3D3B40; vertical-align: middle;">#3D3B40</td></tr>
 				<tr><td>dropdown_color</td><td>Color of dropdown menu</td></tr>
 				<tr><td>footer_color</td><td>Color of footer</td></tr>
-				<tr><td>category_color</td><td>Background color of the home page category</td></tr>
+				<tr><td>category_color</td><td>Background color of the home page category</td><td rowspan="2" style="color: white; background-color: #5522BB; vertical-align: middle;">#5522BB</td></tr>
 				<tr><td>description_color</td><td>Background color of the application description in the application page</td></tr>
-				<tr><td>form_color</td><td>Background color of the text area in the application page</td></tr>
-				<tr><td>non_script_color</td><td>Background color of the form that does not affect the <code>script</code> section</td></tr>
-				<tr><td>non_script_button_color</td><td>Background color of buttons that do not affect the <code>script</code> section</td></tr>
-				<tr><td>submit_color</td><td>Background color of the form that affects only the <code>submit</code> section</td></tr>
-				<tr><td>submit_button_color</td><td>Background color of buttons that affect only the <code>submit</code> section</td></tr>
-        <tr><td>highlight_theme</td><td>The theme name for <a target="_blank" href="https://highlightjs.org/">highlight.js</a> used in the <code>script</code>/<code>submit</code> sections (default: <code>vs</code>)</td></tr>
-        <tr><td>directive_color</td><td>The text color of scheduler directives in the <code>script</code>/<code>submit</code> sections</td></tr>
+				<tr><td>form_color</td><td>Background color of the text area in the application page</td><td style="background-color: #BFCFE7;">#BFCFE7</td></tr>
+				<tr><td>non_script_color</td><td>Background color of the form that does not affect the <code>script</code> section</td><td style="background-color: #FFE28A;">#FFE28A</td></tr>
+				<tr><td>non_script_button_color</td><td>Background color of buttons that do not affect the <code>script</code> section</td><td style="background-color: #FFBF00;">#FFBF00</td></tr>
+				<tr><td>submit_color</td><td>Background color of the form that affects only the <code>submit</code> section</td><td style="background-color: #FFCCCC;">#FFCCCC</td></tr>
+				<tr><td>submit_button_color</td><td>Background color of buttons that affect only the <code>submit</code> section</td><td style="background-color: #FFAAAA">#FFAAAA</td></tr>
+        <tr><td>directive_color</td><td>The text color of scheduler directives in the <code>script</code>/<code>submit</code> sections</td><td style="background-color: #D73A49;">#D73A49</td></tr>
       </table>
       <p>
 	      The <code>apps_dir</code> and <code>scheduler</code> are required. However, the <code>scheduler</code> may be defined inside <code>clusters</code>.
