@@ -7,11 +7,26 @@ partition_options = generate_oc_partition_options(:gpu)
 gpu_options = generate_oc_gpu_options
 gpu_data = gpu_data_attributes
 initial_gpu_max = @global_max_gpus || 4
+initial_gpu_label = "Number of GPUs (1 - #{initial_gpu_max})"
 
 if @dynamic_failed || partition_options.nil? || partition_options.empty?
   partition_options = default_gpu_partition_options
   gpu_options = default_gpu_type_options
   initial_gpu_max = 4
+  initial_gpu_label = "Number of GPUs (1 - #{initial_gpu_max})"
+elsif !partition_options.empty? && !gpu_options.empty?
+  initial_partition = partition_options.first[1]
+  initial_gpu_type = gpu_options.first[1]
+  initial_gpu_max = if @max_gpus_by_partition_and_gpu[initial_partition] &&
+                       @max_gpus_by_partition_and_gpu[initial_partition][initial_gpu_type]
+                      @max_gpus_by_partition_and_gpu[initial_partition][initial_gpu_type]
+                    elsif @max_gpus_by_partition_and_gpu[initial_partition] &&
+                          @max_gpus_by_partition_and_gpu[initial_partition]['any']
+                      @max_gpus_by_partition_and_gpu[initial_partition]['any']
+                    else
+                      initial_gpu_max
+                    end
+  initial_gpu_label = "Number of GPUs (1 - #{initial_gpu_max})"
 end
 -%>
 ---
@@ -55,7 +70,7 @@ form:
 
   gpus:
     widget: number
-    label: Number of GPUs (1 - <%= initial_gpu_max %>)
+    label: <%= initial_gpu_label %>
     value: 1
     min: 1
     max: <%= initial_gpu_max %>

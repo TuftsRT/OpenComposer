@@ -580,7 +580,6 @@ def generate_oc_partition_options(mode = :gpu)
     # For 1D fallback: use partition-wide max across all GPU types
     max_cores = @max_cores_by_partition_and_gpu[p].values.max || @global_max_cores
     max_mem_mb = @max_memory_by_partition_and_gpu[p].values.max || @global_max_memory
-    max_gpus = @max_gpus_by_partition_and_gpu[p].reject { |gpu_type, _| gpu_type == 'none' }.values.max || @global_max_gpus
     max_mem_gb = (max_mem_mb / 1024.0).floor
 
     option = [
@@ -589,8 +588,6 @@ def generate_oc_partition_options(mode = :gpu)
       { "set-max-cores_memory_1" => max_cores },
       { "set-label-cores_memory_2" => "Memory (up to #{max_mem_gb}GB)" },
       { "set-max-cores_memory_2" => max_mem_gb },
-      { "set-label-gpus" => "Number of GPUs (1 - #{max_gpus})" },
-      { "set-max-gpus" => max_gpus },
       { "set-label-time_1" => "Max run time hours (0 - #{max_hours})" },
       { "set-max-time_1" => max_hours },
     ]
