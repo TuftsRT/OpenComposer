@@ -124,7 +124,7 @@ def create_conf
   conf["submit_color"]            ||= "#FFCCCC"
   conf["submit_button_color"]     ||= "#FFAAAA"
   conf["highlight_theme"]         ||= "vs"
-  conf["directive_color"]         ||= "#d73a49"
+  conf["directive_color"]         ||= "#D73A49"
 
   # Set the values for "clusters:" and "history_db"
   if conf.key?("clusters")
