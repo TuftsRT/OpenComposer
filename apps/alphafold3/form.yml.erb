@@ -1,0 +1,406 @@
+<%-
+# Include SLURM discovery partial (provides helpers + dynamic resource data)
+eval(ERB.new(File.read('./partials/slurm_discovery.erb'), trim_mode: '-').result(binding))
+
+partition_options = generate_oc_partition_options(:gpu)
+gpu_options = generate_oc_gpu_options
+gpu_data = gpu_data_attributes
+initial_gpu_max = @global_max_gpus || 4
+
+if @dynamic_failed || partition_options.nil? || partition_options.empty?
+  partition_options = default_gpu_partition_options
+  gpu_options = default_gpu_type_options
+  initial_gpu_max = 4
+end
+-%>
+---
+form:
+  partition:
+    widget: select
+    label: Partition
+<% if !@dynamic_failed -%>
+    data:
+      partition-gpu-max-cores: '<%= gpu_data[:cores] %>'
+      partition-gpu-max-memory: '<%= gpu_data[:memory] %>'
+      partition-gpu-max-gpus: '<%= gpu_data[:gpus] %>'
+      partition-max-hours: '<%= gpu_data[:hours] %>'
+      partition-gpu-options: '<%= gpu_data[:gpu_options] %>'
+      unavailable-gpus: '<%= gpu_data[:unavailable] %>'
+      gres-map: '<%= gpu_data[:gres_map] %>'
+<% end -%>
+    options:
+<% partition_options.each do |opt| -%>
+      - <%= to_yaml_flow(opt) %>
+<% end -%>
+
+  cores_memory:
+    widget: number
+    label: [Number of cores, Memory]
+    size: 2
+    value: [1, 4]
+
+  gpu_type:
+    widget: select
+    label: GPU Arch
+<% if @dynamic_failed -%>
+    help: GPU type fallback options are shown because dynamic Slurm discovery is unavailable.
+<% else -%>
+    help: "Auto-detected GPU types from Slurm. Choose 'any' if you do not have a preference."
+<% end -%>
+    options:
+<% gpu_options.each do |opt| -%>
+      - <%= to_yaml_flow(opt) %>
+<% end -%>
+
+  gpus:
+    widget: number
+    label: Number of GPUs (1 - <%= initial_gpu_max %>)
+    value: 1
+    min: 1
+    max: <%= initial_gpu_max %>
+    step: 1
+
+  time:
+    widget: number
+    label: [Max run time hours (0 - 24), Max run minutes (0 - 59)]
+    size: 2
+    value: [1, 0]
+    min: [0, 0]
+    max: [24, 59]
+    step: [1, 1]
+
+  version:
+    label: Software Version
+    widget: select
+    options:
+      - ["3.0.0"]
+      - ["3.0.1"]
+
+  json_path:
+    widget: path
+    required: false
+    label: Input JSON File
+    help: |
+      Path to a single AlphaFold 3 input JSON file. Leave blank if you want to use `input_dir` instead.
+    favorites:
+      - /cluster/tufts
+      - /cluster/home
+
+  input_dir:
+    widget: path
+    required: false
+    label: Input JSON Directory
+    help: |
+      Path to a directory containing one or more AlphaFold 3 input JSON files. Leave blank if you want to use `json_path` instead.
+    favorites:
+      - /cluster/tufts
+      - /cluster/home
+
+  output_dir:
+    widget: path
+    required: true
+    label: Output Directory
+    help: |
+      Directory where AlphaFold 3 will write results.
+    favorites:
+      - /cluster/tufts
+      - /cluster/home
+
+  model_dir:
+    widget: path
+    required: false
+    label: Model Directory
+    help: |
+      Path to the AlphaFold 3 model parameters. Required when `run_inference` is enabled.
+    favorites:
+      - /cluster/tufts
+      - /cluster/home
+
+  db_dir:
+    widget: path
+    required: false
+    label: Database Directory
+    help: |
+      Path to the AlphaFold 3 public databases. Required when `run_data_pipeline` is enabled.
+    favorites:
+      - /cluster/tufts
+      - /cluster/home
+
+  max_template_date:
+    label: Max Template Date
+    widget: text
+    value: "2021-09-30"
+    help: |
+      Maximum template release date to consider. Format: YYYY-MM-DD.
+
+  show_advanced_option:
+    widget: checkbox
+    label:
+    options:
+      - [
+          "Show advanced option",
+          "",
+          show-run_data_pipeline,
+          show-run_inference,
+          show-num_diffusion_samples,
+          show-num_recycles,
+          show-num_seeds,
+          show-conformer_max_iterations,
+          show-gpu_device,
+          show-buckets,
+          show-jax_compilation_cache_dir,
+          show-force_output_dir,
+          show-compress_large_output_files,
+          show-resolve_msa_overlaps,
+          show-email,
+          show-mail_option,
+        ]
+
+  run_inference:
+    label: Run Inference
+    widget: radio
+    value: true
+    indent: 1
+    options:
+      - ["true", true]
+      - ["false", false]
+    help: |
+      Whether to run model inference. This step requires GPU resources.
+
+  run_data_pipeline:
+    label: Run Data Pipeline
+    widget: radio
+    value: true
+    indent: 1
+    options:
+      - ["true", true]
+      - ["false", false]
+    help: |
+      Whether to run MSA and template search. This step requires access to the AlphaFold 3 databases.
+
+  num_diffusion_samples:
+    label: Diffusion Samples
+    widget: number
+    indent: 1
+    min: 1
+    step: 1
+    required: false
+    help: |
+      Optional override for the number of diffusion samples to generate.
+
+  num_recycles:
+    label: Recycles
+    widget: number
+    indent: 1
+    min: 1
+    step: 1
+    required: false
+    help: |
+      Optional override for the number of recycles to use during inference.
+
+  num_seeds:
+    label: Seeds
+    widget: number
+    indent: 1
+    min: 1
+    step: 1
+    required: false
+    help: |
+      Optional override for the number of seeds to use for inference.
+
+  conformer_max_iterations:
+    label: Conformer Max Iterations
+    widget: number
+    indent: 1
+    min: 1
+    step: 1
+    required: false
+    help: |
+      Optional override for the maximum number of RDKit conformer search iterations.
+
+  gpu_device:
+    label: GPU Device Index
+    widget: number
+    indent: 1
+    value: 0
+    min: 0
+    step: 1
+    required: false
+    help: |
+      GPU device index passed to AlphaFold 3. This is interpreted after any environment-based GPU filtering.
+
+  buckets:
+    label: Compilation Buckets
+    widget: text
+    indent: 1
+    value: "256,512,768,1024,1280,1536,2048,2560,3072,3584,4096,4608,5120"
+    required: false
+    help: |
+      Comma-separated token bucket sizes used to cache compilations.
+
+  jax_compilation_cache_dir:
+    widget: path
+    required: false
+    indent: 1
+    label: JAX Compilation Cache Directory
+    help: |
+      Optional directory for the JAX compilation cache.
+    favorites:
+      - /cluster/tufts
+      - /cluster/home
+
+  force_output_dir:
+    label: Force Output Directory
+    widget: radio
+    value: false
+    indent: 1
+    options:
+      - ["false", false]
+      - ["true", true]
+    help: |
+      Allow reuse of a non-empty output directory.
+
+  compress_large_output_files:
+    label: Compress Large Output Files
+    widget: radio
+    value: false
+    indent: 1
+    options:
+      - ["false", false]
+      - ["true", true]
+    help: |
+      Compress large output files such as mmCIF and confidence JSON files.
+
+  resolve_msa_overlaps:
+    label: Resolve MSA Overlaps
+    widget: radio
+    value: true
+    indent: 1
+    options:
+      - ["true", true]
+      - ["false", false]
+    help: |
+      Whether AlphaFold 3 should resolve MSA overlaps during featurisation.
+
+  mail_option:
+    label: Mail option
+    widget: checkbox
+    direction: horizontal
+    separator: ","
+    indent: 1
+    options:
+      - ["Beginning of job execution", "BEGIN", enable-email]
+      - ["End of job execution", "END", enable-email]
+      - ["Fail of job", "FAIL", enable-email]
+      - ["When the job is requeued", "REQUEUE", enable-email]
+      - ["All", "ALL", enable-email]
+
+  email:
+    widget: email
+    label: Email
+    indent: 2
+
+script: |
+  #!/bin/bash
+  #SBATCH -p #{partition}
+  #SBATCH -N 1
+  #SBATCH -n #{cores_memory_1}
+  #SBATCH --mem #{cores_memory_2}G
+  #SBATCH -t #{time_1}:#{time_2}:00
+  #SBATCH --gres=gpu:#{:gpu_type_1}#{gpus}
+  #{gpu_type_2}
+  #SBATCH --mail-user=#{email}
+  #SBATCH --mail-type=#{mail_option}
+  #SBATCH --error=%x-%J-%u.err
+  #SBATCH --output=%x-%J-%u.out
+
+  set -euo pipefail
+
+  module load alphafold3/#{version}
+
+  JSON_PATH="#{json_path}"
+  INPUT_DIR="#{input_dir}"
+  OUTPUT_DIR="#{output_dir}"
+  MODEL_DIR="#{model_dir}"
+  DB_DIR="#{db_dir}"
+  MAX_TEMPLATE_DATE="#{max_template_date}"
+  RUN_DATA_PIPELINE="#{run_data_pipeline}"
+  RUN_INFERENCE="#{run_inference}"
+  NUM_DIFFUSION_SAMPLES="#{num_diffusion_samples}"
+  NUM_RECYCLES="#{num_recycles}"
+  NUM_SEEDS="#{num_seeds}"
+  CONFORMER_MAX_ITERATIONS="#{conformer_max_iterations}"
+  GPU_DEVICE="#{gpu_device}"
+  BUCKETS="#{buckets}"
+  JAX_COMPILATION_CACHE_DIR="#{jax_compilation_cache_dir}"
+  FORCE_OUTPUT_DIR="#{force_output_dir}"
+  COMPRESS_LARGE_OUTPUT_FILES="#{compress_large_output_files}"
+  RESOLVE_MSA_OVERLAPS="#{resolve_msa_overlaps}"
+
+  if [[ -n "$JSON_PATH" && -n "$INPUT_DIR" ]]; then
+    echo "Set either json_path or input_dir, not both." >&2
+    exit 1
+  fi
+
+  if [[ -z "$JSON_PATH" && -z "$INPUT_DIR" ]]; then
+    echo "One of json_path or input_dir must be provided." >&2
+    exit 1
+  fi
+
+  if [[ "$RUN_DATA_PIPELINE" == "true" && -z "$DB_DIR" ]]; then
+    echo "db_dir is required when run_data_pipeline is true." >&2
+    exit 1
+  fi
+
+  if [[ "$RUN_INFERENCE" == "true" && -z "$MODEL_DIR" ]]; then
+    echo "model_dir is required when run_inference is true." >&2
+    exit 1
+  fi
+
+  cmd=(run_alphafold.py --output_dir="$OUTPUT_DIR")
+
+  if [[ -n "$JSON_PATH" ]]; then
+    cmd+=(--json_path="$JSON_PATH")
+  fi
+  if [[ -n "$INPUT_DIR" ]]; then
+    cmd+=(--input_dir="$INPUT_DIR")
+  fi
+  if [[ -n "$DB_DIR" ]]; then
+    cmd+=(--db_dir="$DB_DIR")
+  fi
+  if [[ -n "$MODEL_DIR" ]]; then
+    cmd+=(--model_dir="$MODEL_DIR")
+  fi
+  if [[ -n "$MAX_TEMPLATE_DATE" ]]; then
+    cmd+=(--max_template_date="$MAX_TEMPLATE_DATE")
+  fi
+
+  cmd+=(--run_data_pipeline="$RUN_DATA_PIPELINE")
+  cmd+=(--run_inference="$RUN_INFERENCE")
+  cmd+=(--force_output_dir="$FORCE_OUTPUT_DIR")
+  cmd+=(--compress_large_output_files="$COMPRESS_LARGE_OUTPUT_FILES")
+  cmd+=(--resolve_msa_overlaps="$RESOLVE_MSA_OVERLAPS")
+
+  if [[ -n "$NUM_DIFFUSION_SAMPLES" ]]; then
+    cmd+=(--num_diffusion_samples="$NUM_DIFFUSION_SAMPLES")
+  fi
+  if [[ -n "$NUM_RECYCLES" ]]; then
+    cmd+=(--num_recycles="$NUM_RECYCLES")
+  fi
+  if [[ -n "$NUM_SEEDS" ]]; then
+    cmd+=(--num_seeds="$NUM_SEEDS")
+  fi
+  if [[ -n "$CONFORMER_MAX_ITERATIONS" ]]; then
+    cmd+=(--conformer_max_iterations="$CONFORMER_MAX_ITERATIONS")
+  fi
+  if [[ -n "$GPU_DEVICE" ]]; then
+    cmd+=(--gpu_device="$GPU_DEVICE")
+  fi
+  if [[ -n "$BUCKETS" ]]; then
+    cmd+=(--buckets="$BUCKETS")
+  fi
+  if [[ -n "$JAX_COMPILATION_CACHE_DIR" ]]; then
+    cmd+=(--jax_compilation_cache_dir="$JAX_COMPILATION_CACHE_DIR")
+  fi
+
+  "${cmd[@]}"

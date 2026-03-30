@@ -6,10 +6,12 @@ eval(ERB.new(File.read('./partials/slurm_discovery.erb'), trim_mode: '-').result
 partition_options = generate_oc_partition_options(:gpu)
 gpu_options = generate_oc_gpu_options
 gpu_data = gpu_data_attributes
+initial_gpu_max = @global_max_gpus || 4
 
 if @dynamic_failed || partition_options.nil? || partition_options.empty?
   partition_options = default_gpu_partition_options
   gpu_options = default_gpu_type_options
+  initial_gpu_max = 4
 end
 -%>
 ---
@@ -53,10 +55,10 @@ form:
 
   gpus:
     widget: number
-    label: Number of GPUs
+    label: Number of GPUs (1 - <%= initial_gpu_max %>)
     value: 1
     min: 1
-    max: 4
+    max: <%= initial_gpu_max %>
     step: 1
 
   time:
