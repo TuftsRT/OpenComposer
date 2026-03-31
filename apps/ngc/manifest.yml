@@ -1,6 +1,6 @@
 ---
 name: NGC (GPU-accelerated)
-category: AI / ML
+category: Modules
 icon: fa-solid fa-microchip
 description: |
   This application generates a Slurm job script for NVIDIA NGC container modules discovered automatically from the Tufts module tree.
