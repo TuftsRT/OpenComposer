@@ -127,6 +127,7 @@ script: |
   #SBATCH -n #{cores_memory_1}
   #SBATCH --mem #{cores_memory_2}G
   #SBATCH -t #{time_1}:#{time_2}:00
+  #SBATCH --array=#{array_1}-#{array_2}
   #SBATCH --mail-user=#{email}
   #SBATCH --mail-type=#{mail_option}
   #SBATCH --error=%x-%J-%u.err
@@ -143,6 +144,19 @@ script: |
   module load #{modules}
 
 check: |
+  array_start = @array_1.to_s.strip
+  array_end = @array_2.to_s.strip
+
+  if array_start.empty? ^ array_end.empty?
+    halt 500, "Both array job start and end must be provided."
+  end
+
+  unless array_start.empty?
+    halt 500, "Array job start must be greater than 0." if @array_1.to_i <= 0
+    halt 500, "Array job end must be greater than 0." if @array_2.to_i <= 0
+    halt 500, "Array job end must be greater than or equal to start." if @array_2.to_i < @array_1.to_i
+  end
+
   if @modules.is_a?(Array)
     selected_modules = @modules.reject { |item| item.to_s.strip.empty? }
     halt 500, "Select at least one BioContainers module." if selected_modules.empty?
