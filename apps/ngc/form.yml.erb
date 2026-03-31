@@ -4,14 +4,36 @@ require 'pathname'
 # Include SLURM discovery partial (provides helpers + dynamic resource data)
 eval(ERB.new(File.read('./partials/slurm_discovery.erb'), trim_mode: '-').result(binding))
 
-partition_options = generate_oc_partition_options(:cpu) || default_cpu_partition_options
-cpu_dynamic = !partition_options.empty?
-partition_options = default_cpu_partition_options unless cpu_dynamic
+partition_options = generate_oc_partition_options(:gpu)
+gpu_options = generate_oc_gpu_options
+gpu_data = gpu_data_attributes
+initial_gpu_max = @global_max_gpus || 4
+initial_gpu_label = "Number of GPUs (1 - #{initial_gpu_max})"
 default_email = "#{ENV['USER'] || 'user'}@tufts.edu"
 
-module_root = '/cluster/tufts/apps/container/biocontainers/modules'
+if @dynamic_failed || partition_options.nil? || partition_options.empty?
+  partition_options = default_gpu_partition_options
+  gpu_options = default_gpu_type_options
+  initial_gpu_max = 4
+  initial_gpu_label = "Number of GPUs (1 - #{initial_gpu_max})"
+elsif !partition_options.empty? && !gpu_options.empty?
+  initial_partition = partition_options.first[1]
+  initial_gpu_type = gpu_options.first[1]
+  initial_gpu_max = if @max_gpus_by_partition_and_gpu[initial_partition] &&
+                       @max_gpus_by_partition_and_gpu[initial_partition][initial_gpu_type]
+                      @max_gpus_by_partition_and_gpu[initial_partition][initial_gpu_type]
+                    elsif @max_gpus_by_partition_and_gpu[initial_partition] &&
+                          @max_gpus_by_partition_and_gpu[initial_partition]['any']
+                      @max_gpus_by_partition_and_gpu[initial_partition]['any']
+                    else
+                      initial_gpu_max
+                    end
+  initial_gpu_label = "Number of GPUs (1 - #{initial_gpu_max})"
+end
 
-def discover_biocontainer_modules(module_root)
+module_root = '/cluster/tufts/apps/container/ngc/modules'
+
+def discover_container_modules(module_root)
   return [] unless Dir.exist?(module_root)
 
   Dir.glob(File.join(module_root, '**', '*'), File::FNM_DOTMATCH)
@@ -30,16 +52,22 @@ def discover_biocontainer_modules(module_root)
      .sort
 end
 
-module_options = discover_biocontainer_modules(module_root).map { |name| [name, name] }
+module_options = discover_container_modules(module_root).map { |name| [name, name] }
 -%>
 ---
 form:
   partition:
     widget: select
     label: Partition
-<% if cpu_dynamic -%>
+<% if !@dynamic_failed -%>
     data:
-      slurm-discovery: 'cpu'
+      partition-gpu-max-cores: '<%= gpu_data[:cores] %>'
+      partition-gpu-max-memory: '<%= gpu_data[:memory] %>'
+      partition-gpu-max-gpus: '<%= gpu_data[:gpus] %>'
+      partition-max-hours: '<%= gpu_data[:hours] %>'
+      partition-gpu-options: '<%= gpu_data[:gpu_options] %>'
+      unavailable-gpus: '<%= gpu_data[:unavailable] %>'
+      gres-map: '<%= gpu_data[:gres_map] %>'
 <% end -%>
     options:
 <% partition_options.each do |opt| -%>
@@ -52,6 +80,27 @@ form:
     size: 2
     value: [1, 4]
 
+  gpu_type:
+    widget: select
+    label: GPU Arch
+<% if @dynamic_failed -%>
+    help: GPU type fallback options are shown because dynamic Slurm discovery is unavailable.
+<% else -%>
+    help: "Auto-detected GPU types from Slurm. Choose 'any' if you do not have a preference."
+<% end -%>
+    options:
+<% gpu_options.each do |opt| -%>
+      - <%= to_yaml_flow(opt) %>
+<% end -%>
+
+  gpus:
+    widget: number
+    label: <%= initial_gpu_label %>
+    value: 1
+    min: 1
+    max: <%= initial_gpu_max %>
+    step: 1
+
   time:
     widget: number
     label: [Max run time hours (0 - 24), Max run minutes (0 - 59)]
@@ -63,7 +112,7 @@ form:
 
   modules:
     widget: multi_select
-    label: Load BioContainers modules
+    label: Load NGC modules
     separator: " "
     help: |
       Available modules are scanned automatically from `<%= module_root %>` when the form is rendered.
@@ -127,6 +176,8 @@ script: |
   #SBATCH -n #{cores_memory_1}
   #SBATCH --mem #{cores_memory_2}G
   #SBATCH -t #{time_1}:#{time_2}:00
+  #SBATCH --gres=gpu:#{:gpu_type_1}#{gpus}
+  #{gpu_type_2}
   #SBATCH --mail-user=#{email}
   #SBATCH --mail-type=#{mail_option}
   #SBATCH --error=%x-%J-%u.err
@@ -145,7 +196,7 @@ script: |
 check: |
   if @modules.is_a?(Array)
     selected_modules = @modules.reject { |item| item.to_s.strip.empty? }
-    halt 500, "Select at least one BioContainers module." if selected_modules.empty?
+    halt 500, "Select at least one NGC module." if selected_modules.empty?
   elsif @modules.to_s.strip.empty?
-    halt 500, "Select at least one BioContainers module."
+    halt 500, "Select at least one NGC module."
   end
