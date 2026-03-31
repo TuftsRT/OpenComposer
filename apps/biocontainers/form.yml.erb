@@ -7,6 +7,7 @@ eval(ERB.new(File.read('./partials/slurm_discovery.erb'), trim_mode: '-').result
 partition_options = generate_oc_partition_options(:cpu) || default_cpu_partition_options
 cpu_dynamic = !partition_options.empty?
 partition_options = default_cpu_partition_options unless cpu_dynamic
+default_email = "#{ENV['USER'] || 'user'}@tufts.edu"
 
 module_root = '/cluster/tufts/apps/container/biocontainers/modules'
 
@@ -123,6 +124,7 @@ form:
   email:
     widget: email
     label: Email
+    value: <%= default_email %>
     indent: 2
 
 script: |

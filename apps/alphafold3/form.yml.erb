@@ -7,6 +7,7 @@ gpu_options = generate_oc_gpu_options
 gpu_data = gpu_data_attributes
 initial_gpu_max = @global_max_gpus || 4
 initial_gpu_label = "Number of GPUs (1 - #{initial_gpu_max})"
+default_email = "#{ENV['USER'] || 'user'}@tufts.edu"
 
 if @dynamic_failed || partition_options.nil? || partition_options.empty?
   partition_options = default_gpu_partition_options
@@ -313,6 +314,7 @@ form:
   email:
     widget: email
     label: Email
+    value: <%= default_email %>
     indent: 2
 
 script: |
