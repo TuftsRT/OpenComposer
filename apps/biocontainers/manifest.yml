@@ -1,0 +1,6 @@
+---
+name: BioContainers
+category: Bioinformatics
+icon: fa-solid fa-dna
+description: |
+  This application generates a Slurm job script for BioContainers modules discovered automatically from the Tufts module tree.
