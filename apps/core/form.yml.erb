@@ -1,0 +1,191 @@
+<%-
+require 'pathname'
+
+# Include SLURM discovery partial (provides helpers + dynamic resource data)
+eval(ERB.new(File.read('./partials/slurm_discovery.erb'), trim_mode: '-').result(binding))
+
+partition_options = generate_oc_partition_options(:all)
+gpu_options = generate_oc_gpu_options
+gpu_data = gpu_data_attributes
+initial_gpu_max = @global_max_gpus || 4
+initial_gpu_label = "Number of GPUs (1 - #{initial_gpu_max})"
+default_email = "#{ENV['USER'] || 'user'}@tufts.edu"
+
+if partition_options.nil? || partition_options.empty?
+  partition_options = default_cpu_partition_options
+end
+
+module_roots = [
+  '/cluster/tufts/apps/modules/9/x86_64/openmpi/gcc/12.4.0/4.1.7',
+  '/cluster/tufts/apps/modules/9/x86_64/Core'
+]
+
+def discover_container_modules(module_roots)
+  module_roots.flat_map do |module_root|
+    next [] unless Dir.exist?(module_root)
+
+    Dir.glob(File.join(module_root, '**', '*'), File::FNM_DOTMATCH)
+       .select { |path| File.file?(path) || File.symlink?(path) }
+       .reject do |path|
+         rel = Pathname.new(path).relative_path_from(Pathname.new(module_root)).to_s
+         parts = rel.split(File::SEPARATOR)
+         parts.any? { |part| part.start_with?('.') } || rel.empty?
+       end
+       .map do |path|
+         rel = Pathname.new(path).relative_path_from(Pathname.new(module_root)).to_s
+         rel.sub(/\.(lua|tcl)\z/, '')
+       end
+       .reject { |name| name.empty? || name.end_with?('/default') }
+  end.uniq.sort
+end
+
+module_options = discover_container_modules(module_roots).map { |name| [name, name] }
+-%>
+---
+form:
+  partition:
+    widget: select
+    label: Partition
+<% if !@dynamic_failed -%>
+    data:
+      partition-gpu-max-cores: '<%= gpu_data[:cores] %>'
+      partition-gpu-max-memory: '<%= gpu_data[:memory] %>'
+      partition-gpu-max-gpus: '<%= gpu_data[:gpus] %>'
+      partition-max-hours: '<%= gpu_data[:hours] %>'
+      partition-gpu-options: '<%= gpu_data[:gpu_options] %>'
+      unavailable-gpus: '<%= gpu_data[:unavailable] %>'
+      gres-map: '<%= gpu_data[:gres_map] %>'
+<% else -%>
+    data:
+      slurm-discovery: 'cpu'
+<% end -%>
+    options:
+<% partition_options.each do |opt| -%>
+      - <%= to_yaml_flow(opt) %>
+<% end -%>
+
+  cores_memory:
+    widget: number
+    label: [Number of cores, Memory]
+    size: 2
+    value: [1, 4]
+
+  gpu_type:
+    widget: select
+    label: GPU Arch
+    help: |
+      GPU fields are shown only when you select a GPU-capable partition.
+    options:
+<% gpu_options.each do |opt| -%>
+      - <%= to_yaml_flow(opt) %>
+<% end -%>
+
+  gpus:
+    widget: number
+    label: <%= initial_gpu_label %>
+    value: 1
+    min: 1
+    max: <%= initial_gpu_max %>
+    step: 1
+
+  time:
+    widget: number
+    label: [Max run time hours (0 - 24), Max run minutes (0 - 59)]
+    size: 2
+    value: [1, 0]
+    min: [0, 0]
+    max: [24, 59]
+    step: [1, 1]
+
+  modules:
+    widget: multi_select
+    label: Load modules
+    separator: " "
+    help: |
+      Available modules are scanned automatically from:
+      - `<%= module_roots[0] %>`
+      - `<%= module_roots[1] %>`
+<% if module_options.empty? -%>
+    options:
+      - ["No modules found under the configured Core module roots", ""]
+<% else -%>
+    options:
+<% module_options.each do |opt| -%>
+      - <%= to_yaml_flow(opt) %>
+<% end -%>
+<% end -%>
+
+  workdir:
+    widget: path
+    required: false
+    label: Working Directory
+    help: |
+      Optional working directory for the job. If left blank, the job runs from the submission directory.
+    favorites:
+      - /cluster/tufts
+      - /cluster/home
+
+  show_advanced_option:
+    widget: checkbox
+    label:
+    options:
+      - ["Show advanced option", "", show-email, show-mail_option, show-array ]
+
+  array:
+    widget: number
+    label: [ Array Job (start index), Array Job (last index) ]
+    size: 2
+    indent: 1
+    min: [0, 0]
+    help: Each job executed from an array job is assigned a task ID, which can be referenced via `SLURM_ARRAY_TASK_ID`.
+
+  mail_option:
+    label: Mail option
+    widget: checkbox
+    direction: horizontal
+    separator: ","
+    indent: 1
+    options:
+      - [ "Beginning of job execution", 'BEGIN',   enable-email ]
+      - [ "End of job execution",       'END',     enable-email ]
+      - [ "Fail of job",                'FAIL',    enable-email ]
+      - [ "When the job is requeued",   'REQUEUE', enable-email ]
+      - [ "All",                        'ALL',     enable-email ]
+
+  email:
+    widget: email
+    label: Email
+    value: <%= default_email %>
+    indent: 2
+
+script: |
+  #!/bin/bash
+  #SBATCH -p #{partition}
+  #SBATCH -N 1
+  #SBATCH -n #{cores_memory_1}
+  #SBATCH --mem #{cores_memory_2}G
+  #SBATCH -t #{time_1}:#{time_2}:00
+  #{gpu_type_3}
+  #{gpu_type_4}
+  #SBATCH --mail-user=#{email}
+  #SBATCH --mail-type=#{mail_option}
+  #SBATCH --error=%x-%J-%u.err
+  #SBATCH --output=%x-%J-%u.out
+
+  set -euo pipefail
+
+  if [[ -n "#{workdir}" ]]; then
+    cd "#{workdir}"
+  else
+    cd "${SLURM_SUBMIT_DIR:-$PWD}"
+  fi
+
+  module load #{modules}
+
+check: |
+  if @modules.is_a?(Array)
+    selected_modules = @modules.reject { |item| item.to_s.strip.empty? }
+    halt 500, "Select at least one module." if selected_modules.empty?
+  elsif @modules.to_s.strip.empty?
+    halt 500, "Select at least one module."
+  end

@@ -393,7 +393,7 @@ end
 
 @all_partitions = (@detected_by_partition.keys + @a100_sizes_by_partition.keys).uniq
 @all_partitions = @all_partitions.select { |p| @user_partitions.include?(p) }
-@all_partitions.each do |p|
+@user_partitions.each do |p|
   @partition_options_map[p] = build_opts.call(@detected_by_partition[p], @a100_sizes_by_partition[p])
 end
 
