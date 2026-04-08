@@ -213,22 +213,13 @@ end
   end
 end
 
-# Human-friendly labels for known GPU types
-@label_map = {
-  'h200'        => 'H200 - 140GB',
-  'h100'        => 'H100 - 80GB',
-  'a100'        => 'A100',
-  'a100_40'     => 'A100 - 40GB',
-  'a100_80'     => 'A100 - 80GB',
-  'l40s'        => 'L40S - 48GB',
-  'l40'         => 'L40 - 48GB',
-  'rtx_6000ada' => 'RTX 6000Ada - 48GB',
-  'rtx_a6000'   => 'RTX A6000 - 48GB',
-  'rtx_6000'    => 'RTX 6000 - 24GB',
-  'v100'        => 'v100 - 16GB',
-  'p100'        => 'P100 - 16GB',
-  't4'          => 'T4 - 16GB'
-}
+# Zero-maintenance GPU labels derived directly from SLURM identifiers.
+# This avoids keeping a static map in sync as new GPU types are added.
+def gpu_display_label(gpu_type)
+  return gpu_type if gpu_type.nil? || gpu_type.empty?
+
+  gpu_type.tr('_', ' ').upcase
+end
 
 # Preferred display order
 order = %w[h200 h100 a100_80 a100_40 a100 l40s l40 rtx_6000ada rtx_a6000 rtx_6000 v100 p100 t4]
@@ -240,14 +231,14 @@ if @detected_types.empty? && @a100_sizes.empty?
   @options << ['none', 'none']
 else
   @options << ['any', 'any']
-  @options << [@label_map['a100_40'], 'a100_40'] if @a100_sizes.include?('a100_40')
-  @options << [@label_map['a100_80'], 'a100_80'] if @a100_sizes.include?('a100_80')
+  @options << [gpu_display_label('a100_40'), 'a100_40'] if @a100_sizes.include?('a100_40')
+  @options << [gpu_display_label('a100_80'), 'a100_80'] if @a100_sizes.include?('a100_80')
 
   remaining = @detected_types.to_a
   remaining.sort_by! { |t| priority.fetch(t, 999) }
   remaining.each do |t|
     next if %w[a100_40 a100_80].include?(t)
-    label = @label_map[t] || t.upcase
+    label = gpu_display_label(t)
     @options << [label, t]
   end
 end
@@ -262,10 +253,10 @@ build_opts = lambda do |types_set, a100_size_set|
   else
     local << ['any', 'any']
     if a100_size_set.include?('a100_40')
-      local << [@label_map['a100_40'], 'a100_40']
+      local << [gpu_display_label('a100_40'), 'a100_40']
     end
     if a100_size_set.include?('a100_80')
-      local << [@label_map['a100_80'], 'a100_80']
+      local << [gpu_display_label('a100_80'), 'a100_80']
     end
     remaining_local = types_set.to_a
     if !a100_size_set.empty?
@@ -274,7 +265,7 @@ build_opts = lambda do |types_set, a100_size_set|
     remaining_local.sort_by! { |t| priority.fetch(t, 999) }
     remaining_local.each do |t|
       next if %w[a100_40 a100_80].include?(t)
-      label = @label_map[t] || t.upcase
+      label = gpu_display_label(t)
       local << [label, t]
     end
   end
@@ -404,12 +395,7 @@ end
 
 # Static fallback GPU type options (when SLURM discovery fails)
 def default_gpu_type_options
-  [
-    ['P100', 'p100'], ['A100', 'a100_40'], ['v100', 'v100'], ['T4', 't4'],
-    ['RTX 6000', 'rtx_6000'], ['RTX A6000', 'rtx_a6000'],
-    ['RTX 6000Ada', 'rtx_6000ada'], ['L40', 'l40'], ['L40s', 'l40s'],
-    ['H100', 'h100'], ['H200', 'h200']
-  ]
+  [['any', 'any']]
 end
 
 # Build all GPU-related JSON data attribute strings for the partition select widget.
@@ -487,8 +473,7 @@ end
 def unavailable_gpu_map
   map = {}
   @unavailable_gpu_types.each do |gpu_type|
-    label = @label_map[gpu_type] || gpu_type.upcase
-    map[gpu_type] = label
+    map[gpu_type] = gpu_display_label(gpu_type)
   end
   map
 end
@@ -546,7 +531,6 @@ rescue => e
   @max_memory_by_partition_and_gpu ||= Hash.new { |h, k| h[k] = Hash.new(0) }
   @max_hours_by_partition          ||= Hash.new(0)
   @unavailable_gpu_types           ||= Set.new
-  @label_map ||= {}
   @gres_map  ||= {}
 
   # Define helper stubs so ERB doesn't fail
