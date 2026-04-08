@@ -28,7 +28,6 @@ end
 
 # Per-partition tracking
 @detected_by_partition    = Hash.new { |h, k| h[k] = Set.new }
-@a100_sizes_by_partition  = Hash.new { |h, k| h[k] = Set.new }
 
 # Core/CPU tracking per partition AND GPU type
 @max_cores_by_partition_and_gpu   = Hash.new { |h, k| h[k] = Hash.new(0) }
@@ -188,22 +187,29 @@ end
     end
   end
 
-  # Record per-partition A100 sizes
+  # Record per-partition synthesized A100 variants
   if feats.include?('a100-40G')
-    parts.each { |p| @a100_sizes_by_partition[p] << 'a100_40' }
+    parts.each { |p| @detected_by_partition[p] << 'a100_40' }
   end
   if feats.include?('a100-80G')
-    parts.each { |p| @a100_sizes_by_partition[p] << 'a100_80' }
+    parts.each { |p| @detected_by_partition[p] << 'a100_80' }
+  end
+end
+
+# Fold synthesized A100 variants into the generic GPU identifier pipeline.
+if !@a100_sizes.empty?
+  @detected_types.merge(@a100_sizes)
+  @detected_types.delete('a100')
+
+  @detected_by_partition.each_value do |types|
+    next if (types & @a100_sizes).empty?
+
+    types.delete('a100')
   end
 end
 
 # Flag if dynamic discovery failed (no types detected)
 @dynamic_failed = @detected_types.empty?
-
-# If we know specific A100 sizes, prefer those over a generic 'a100'
-if !@a100_sizes.empty?
-  @detected_types.delete('a100')
-end
 
 # Determine which GPU types are completely unavailable (all nodes down/drained)
 @unavailable_gpu_types = Set.new
@@ -227,17 +233,14 @@ priority = order.each_with_index.to_h
 
 # Cluster-wide default options
 @options = []
-if @detected_types.empty? && @a100_sizes.empty?
+if @detected_types.empty?
   @options << ['none', 'none']
 else
   @options << ['any', 'any']
-  @options << [gpu_display_label('a100_40'), 'a100_40'] if @a100_sizes.include?('a100_40')
-  @options << [gpu_display_label('a100_80'), 'a100_80'] if @a100_sizes.include?('a100_80')
 
   remaining = @detected_types.to_a
   remaining.sort_by! { |t| priority.fetch(t, 999) }
   remaining.each do |t|
-    next if %w[a100_40 a100_80].include?(t)
     label = gpu_display_label(t)
     @options << [label, t]
   end
@@ -246,25 +249,15 @@ end
 # Build partition-aware options map
 @partition_options_map = {}
 
-build_opts = lambda do |types_set, a100_size_set|
+build_opts = lambda do |types_set|
   local = []
-  if types_set.empty? && a100_size_set.empty?
+  if types_set.empty?
     local << ['none', 'none']
   else
     local << ['any', 'any']
-    if a100_size_set.include?('a100_40')
-      local << [gpu_display_label('a100_40'), 'a100_40']
-    end
-    if a100_size_set.include?('a100_80')
-      local << [gpu_display_label('a100_80'), 'a100_80']
-    end
     remaining_local = types_set.to_a
-    if !a100_size_set.empty?
-      remaining_local.delete('a100')
-    end
     remaining_local.sort_by! { |t| priority.fetch(t, 999) }
     remaining_local.each do |t|
-      next if %w[a100_40 a100_80].include?(t)
       label = gpu_display_label(t)
       local << [label, t]
     end
@@ -272,10 +265,9 @@ build_opts = lambda do |types_set, a100_size_set|
   local
 end
 
-@all_partitions = (@detected_by_partition.keys + @a100_sizes_by_partition.keys).uniq
-@all_partitions = @all_partitions.select { |p| @user_partitions.include?(p) }
+@all_partitions = @detected_by_partition.keys.select { |p| @user_partitions.include?(p) }
 @all_partitions.each do |p|
-  @partition_options_map[p] = build_opts.call(@detected_by_partition[p], @a100_sizes_by_partition[p])
+  @partition_options_map[p] = build_opts.call(@detected_by_partition[p])
 end
 
 @partition_options_map['all'] = @options
@@ -416,7 +408,7 @@ end
 def generate_oc_partition_options(mode = :gpu)
   partitions = case mode
                when :gpu
-                 @all_partitions.select { |p| !@detected_by_partition[p].empty? || !@a100_sizes_by_partition[p].empty? }
+                 @all_partitions.select { |p| !@detected_by_partition[p].empty? }
                when :cpu
                  # Exclude GPU-only partitions (where every node has a GPU).
                  # SLURM rejects CPU-only jobs on these (e.g. 'gpu', 'a100').
