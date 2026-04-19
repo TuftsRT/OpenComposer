@@ -2,7 +2,11 @@ require "sinatra"
 require "sinatra/reloader" if ENV.fetch("RACK_ENV", "production") == "development"
 require "yaml"
 require "erb"
+require "sqlite3"
+require "json"
+require "digest"
 require "pstore"
+require "time"
 require "fileutils"
 require "./lib/index"
 require "./lib/form"
@@ -139,10 +143,10 @@ def create_conf
         conf[key][name] = cluster_conf.fetch(key, defaults[key]) || defaults[key]
       end
 
-      conf["history_db"][name] = File.join(conf["data_dir"], "#{name}.db")
+      conf["history_db"][name] = File.join(conf["data_dir"], "#{name}.sqlite3")
     end
   else
-    conf["history_db"] = File.join(conf["data_dir"], "#{conf["scheduler"]}.db")
+    conf["history_db"] = File.join(conf["data_dir"], "#{conf["scheduler"]}.sqlite3")
   end
 
   # Create data directory
@@ -393,29 +397,25 @@ def show_website(job_id = nil, error_msg = nil, error_params = nil, script_path 
       @script_content = nil
       @submit_content = nil
       if params["jobId"] || job_id
-        history_db = if @conf.key?("clusters")
-                       cluster_name = params[params["jobId"] ? "cluster" : HEADER_CLUSTER_NAME] || @conf["clusters"].keys.first
-                       @conf["history_db"][cluster_name]
-                     else
-                       @conf["history_db"]
-                     end
+        cluster_name = if @conf.key?("clusters")
+                         params[params["jobId"] ? "cluster" : HEADER_CLUSTER_NAME] || @conf["clusters"].keys.first
+                       end
 
-        if history_db.nil? || !File.exist?(history_db)
+        cache = nil
+        id = if params["jobId"]
+               params["jobId"]
+             else
+               job_id.is_a?(Array) ? job_id[0].to_s : job_id.to_s
+             end
+        begin
+          db = open_history_db(@conf, cluster_name)
+        rescue StandardError
+          history_db = @conf.key?("clusters") ? @conf["history_db"][cluster_name] : @conf["history_db"]
           @error_msg = history_db.nil? ? "#{cluster_name} is not invalid." : "#{history_db} is not found."
           return erb :error
         end
-
-        cache = nil
-        id = nil
-        db = PStore.new(history_db)
-        db.transaction(true) do
-          id = if params["jobId"]
-                 params["jobId"]
-               else
-                 job_id.is_a?(Array) ? job_id[0].to_s : job_id.to_s
-               end
-          cache = db[id]
-        end
+        record = find_job(db, id)
+        cache = job_record_to_legacy_hash(record)
 
         if cache.nil?
           @error_msg = "Specified Job ID (#{id}) is not found."
@@ -561,10 +561,10 @@ post "/*" do
       output_log("Cancel job", scheduler, cluster: cluster_name, job_ids: job_ids)
     when "DeleteInfo"
       if File.exist?(history_db)
-        db = PStore.new(history_db)
+        db = open_history_db(conf, conf.key?("clusters") ? cluster_name : nil)
         db.transaction do
           job_ids.each do |job_id|
-            db.delete(job_id)
+            delete_job(db, job_id)
           end
         end
         output_log("Delete job information", scheduler, cluster: cluster_name, job_ids: job_ids)
@@ -698,16 +698,35 @@ post "/*" do
 
     Dir.chdir(script_dir) do
       job_id, error_msg = scheduler.submit(script_path, escape_html(job_name.strip), submit_options, bin, bin_overrides, ssh_wrapper)
-      params[JOB_SUBMISSION_TIME] = Time.now.strftime("%Y-%m-%d %H:%M:%S")
+      params[JOB_SUBMISSION_TIME] = Time.now.iso8601
     end
 
     # Save a job history
     FileUtils.mkdir_p(data_dir)
-    db = PStore.new(history_db)
+    db = open_history_db(@conf, @conf.key?("clusters") ? cluster_name : nil)
+    submission_time = params[JOB_SUBMISSION_TIME]
+    submit_data = params.to_h.merge(
+      "app_name" => params[JOB_APP_NAME],
+      "app_dir_name" => params[JOB_DIR_NAME],
+      "script_location" => params[HEADER_SCRIPT_LOCATION],
+      "script_name" => params[HEADER_SCRIPT_NAME],
+      "job_name" => params[HEADER_JOB_NAME].to_s,
+      "partition" => params[JOB_PARTITION].to_s,
+      "submission_time" => submission_time,
+      "updated_time" => submission_time,
+      "status" => JOB_STATUS["queued"]
+    )
     db.transaction do
       Array(job_id).each do |id|
-        db[id] = params
+        record = build_job_record(
+          existing: nil,
+          submit_data: submit_data.merge("job_id" => id.to_s),
+          scheduler_data: nil,
+          conf: @conf
+        )
+        upsert_job(db, record)
       end
+      set_metadata(db, "history_signature", build_history_signature(@conf["history"]))
     end
 
     # Output log

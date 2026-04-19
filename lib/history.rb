@@ -202,15 +202,362 @@ helpers do
     return cluster_db
   end
 
+  # Return a legacy PStore DB path from the current configuration.
+  def get_legacy_history_db(conf, cluster_name)
+    if conf.key?("clusters")
+      halt 500, "#{cluster_name} is invalid." unless cluster_name
+      return File.join(conf["data_dir"], "#{cluster_name}.db")
+    end
+
+    return File.join(conf["data_dir"], "#{conf["scheduler"]}.db")
+  end
+
+  # Open a SQLite history DB and ensure the required schema exists.
+  def open_history_db(conf, cluster_name)
+    sqlite_path = get_history_db(conf, cluster_name)
+    legacy_path = get_legacy_history_db(conf, cluster_name)
+    migrate_pstore_to_sqlite(sqlite_path, legacy_path, conf) if !File.exist?(sqlite_path) && File.exist?(legacy_path)
+
+    db = SQLite3::Database.new(sqlite_path)
+    db.results_as_hash = true
+    setup_history_db(db)
+    db
+  end
+
+  # Create the required tables and indexes if they do not exist yet.
+  def setup_history_db(db)
+    db.execute_batch(<<~SQL)
+      CREATE TABLE IF NOT EXISTS jobs (
+        job_id TEXT PRIMARY KEY,
+        app_name TEXT,
+        app_dir_name TEXT,
+        script_location TEXT,
+        script_name TEXT,
+        job_name TEXT,
+        partition TEXT,
+        submission_time TEXT,
+        updated_time TEXT,
+        status TEXT,
+        payload_json TEXT NOT NULL DEFAULT '{}',
+        search_text TEXT NOT NULL DEFAULT ''
+      );
+
+      CREATE TABLE IF NOT EXISTS metadata (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
+      CREATE INDEX IF NOT EXISTS idx_jobs_submission_time ON jobs(submission_time);
+      CREATE INDEX IF NOT EXISTS idx_jobs_updated_time ON jobs(updated_time);
+    SQL
+  end
+
+  # Return one job record by ID.
+  def find_job(db, job_id)
+    db.get_first_row("SELECT * FROM jobs WHERE job_id = ?", [job_id])
+  end
+
+  # Insert or update a job record.
+  def upsert_job(db, record)
+    params = [
+      record["job_id"],
+      record["app_name"],
+      record["app_dir_name"],
+      record["script_location"],
+      record["script_name"],
+      record["job_name"],
+      record["partition"],
+      record["submission_time"],
+      record["updated_time"],
+      record["status"],
+      record["payload_json"],
+      record["search_text"]
+    ]
+
+    db.execute(<<~SQL, params)
+      INSERT INTO jobs (
+        job_id,
+        app_name,
+        app_dir_name,
+        script_location,
+        script_name,
+        job_name,
+        partition,
+        submission_time,
+        updated_time,
+        status,
+        payload_json,
+        search_text
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(job_id) DO UPDATE SET
+        app_name = excluded.app_name,
+        app_dir_name = excluded.app_dir_name,
+        script_location = excluded.script_location,
+        script_name = excluded.script_name,
+        job_name = excluded.job_name,
+        partition = excluded.partition,
+        submission_time = excluded.submission_time,
+        updated_time = excluded.updated_time,
+        status = excluded.status,
+        payload_json = excluded.payload_json,
+        search_text = excluded.search_text
+    SQL
+  end
+
+  # Delete one job record.
+  def delete_job(db, job_id)
+    db.execute("DELETE FROM jobs WHERE job_id = ?", [job_id])
+  end
+
+  # Yield each job record.
+  def each_job(db, &block)
+    db.execute("SELECT * FROM jobs ORDER BY submission_time DESC, job_id DESC", &block)
+  end
+
+  # Return all unfinished job IDs.
+  def get_unfinished_job_ids(db)
+    db.execute(<<~SQL, [JOB_STATUS["completed"], JOB_STATUS["failed"]]).map { |row| row["job_id"] }
+      SELECT job_id
+      FROM jobs
+      WHERE status IS NULL OR (status != ? AND status != ?)
+      ORDER BY submission_time DESC, job_id DESC
+    SQL
+  end
+
+  # Return one metadata value.
+  def get_metadata(db, key)
+    row = db.get_first_row("SELECT value FROM metadata WHERE key = ?", [key])
+    row && row["value"]
+  end
+
+  # Insert or update one metadata value.
+  def set_metadata(db, key, value)
+    db.execute(<<~SQL, [key, value])
+      INSERT INTO metadata (key, value)
+      VALUES (?, ?)
+      ON CONFLICT(key) DO UPDATE SET
+        value = excluded.value
+    SQL
+  end
+
+  # Merge incoming data into existing data while preserving existing values for nil/empty updates.
+  def merge_job_data(existing, incoming)
+    merged = (existing || {}).dup
+    (incoming || {}).each do |key, value|
+      next if value.nil?
+      next if value.is_a?(String) && value.empty?
+
+      merged[key] = value
+    end
+    merged
+  end
+
+  # Return the keys that are stored as dedicated columns instead of payload_json.
+  def job_record_column_keys
+    %w[
+      job_id
+      app_name
+      app_dir_name
+      script_location
+      script_name
+      job_name
+      partition
+      submission_time
+      updated_time
+      status
+    ]
+  end
+
+  # Build payload data by excluding dedicated column keys.
+  def build_payload_hash(record_hash)
+    (record_hash || {}).each_with_object({}) do |(key, value), payload|
+      next if job_record_column_keys.include?(key.to_s)
+      payload[key.to_s] = value
+    end
+  end
+
+  # Build a stable signature for history search configuration.
+  def build_history_signature(history_conf)
+    keys = Array(history_conf).map do |item|
+      if item.is_a?(Hash)
+        item.keys
+      else
+        item
+      end
+    end.flatten.compact.map(&:to_s).sort
+
+    Digest::SHA256.hexdigest(keys.join("\n"))
+  end
+
+  # Return the normalized search key for a history field.
+  def normalize_history_search_key(key)
+    {
+      "OC_HISTORY_JOB_NAME" => "job_name",
+      "OC_HISTORY_PARTITION" => "partition",
+      "OC_HISTORY_SUBMISSION_TIME" => "submission_time"
+    }[key] || key
+  end
+
+  # Build the search text from mandatory fields and configured history fields.
+  def build_search_text(record, payload_hash, conf)
+    payload_hash ||= {}
+
+    mandatory_keys = %w[job_id app_name script_name status]
+    configured_keys = Array(conf["history"]).map do |item|
+      if item.is_a?(Hash)
+        item.keys
+      else
+        item
+      end
+    end.flatten.compact.map { |key| normalize_history_search_key(key.to_s) }
+
+    keys = (mandatory_keys + configured_keys).uniq - %w[submission_time updated_time]
+    values = keys.flat_map do |key|
+      value = record[key] || record[key.to_sym] || payload_hash[key]
+      Array(value)
+    end
+
+    values
+      .compact
+      .map(&:to_s)
+      .map { |value| value.gsub(/\s+/, " ").strip }
+      .reject(&:empty?)
+      .join(" ")
+      .downcase
+  end
+
+  # Build a SQLite job record from existing, submit, and scheduler data.
+  def build_job_record(existing:, submit_data:, scheduler_data:, conf:)
+    merged = merge_job_data({}, existing)
+    merged = merge_job_data(merged, submit_data)
+    merged = merge_job_data(merged, scheduler_data)
+
+    record = {
+      "job_id" => merged["job_id"],
+      "app_name" => merged["app_name"],
+      "app_dir_name" => merged["app_dir_name"],
+      "script_location" => merged["script_location"],
+      "script_name" => merged["script_name"],
+      "job_name" => merged["job_name"] || "",
+      "partition" => merged["partition"] || "",
+      "submission_time" => merged["submission_time"],
+      "updated_time" => merged["updated_time"],
+      "status" => merged["status"]
+    }
+
+    payload_hash = build_payload_hash(merged)
+    record["payload_json"] = JSON.generate(payload_hash)
+    record["search_text"] = build_search_text(record, payload_hash, conf)
+    record
+  end
+
+  # Normalize a time string into ISO 8601 using the local timezone.
+  def normalize_time_for_db(value)
+    return nil if value.nil?
+
+    string = value.to_s.strip
+    return nil if string.empty?
+
+    Time.parse(string).iso8601
+  rescue ArgumentError
+    nil
+  end
+
+  # Migrate one legacy PStore DB into a SQLite DB.
+  def migrate_pstore_to_sqlite(sqlite_path, legacy_path, conf)
+    FileUtils.mkdir_p(File.dirname(sqlite_path))
+
+    db = SQLite3::Database.new(sqlite_path)
+    db.results_as_hash = true
+    setup_history_db(db)
+
+    begin
+      db.transaction
+      store = PStore.new(legacy_path)
+      store.transaction(true) do
+        store.roots.each do |job_id|
+          data = store[job_id]
+          next unless data
+
+          upsert_job(db, convert_pstore_record_to_sqlite(job_id.to_s, data, conf))
+        end
+      end
+      set_metadata(db, "history_signature", build_history_signature(conf["history"]))
+      db.commit
+    rescue StandardError
+      db.rollback
+      db.close if db
+      File.delete(sqlite_path) if File.exist?(sqlite_path)
+      raise
+    end
+
+    db.close
+  end
+
+  # Convert a legacy PStore record into a SQLite job record.
+  def convert_pstore_record_to_sqlite(job_id, data, conf)
+    legacy = (data || {}).transform_keys(&:to_s)
+
+    submission_time = normalize_time_for_db(legacy[JOB_SUBMISSION_TIME.to_s])
+    merged = legacy.merge(
+      "job_id" => job_id,
+      "app_name" => legacy[JOB_APP_NAME.to_s],
+      "app_dir_name" => legacy[JOB_DIR_NAME.to_s],
+      "script_location" => legacy[HEADER_SCRIPT_LOCATION.to_s],
+      "script_name" => legacy[HEADER_SCRIPT_NAME.to_s],
+      "job_name" => legacy[JOB_NAME.to_s] || legacy[HEADER_JOB_NAME.to_s] || "",
+      "partition" => legacy[JOB_PARTITION.to_s] || legacy["partition"] || "",
+      "submission_time" => submission_time,
+      "updated_time" => submission_time,
+      "status" => legacy[JOB_STATUS_ID.to_s]
+    )
+
+    build_job_record(existing: nil, submit_data: merged, scheduler_data: nil, conf: conf)
+  end
+
+  # Parse payload_json and merge it back with dedicated columns using legacy key names.
+  def job_record_to_legacy_hash(record)
+    return nil unless record
+
+    payload_hash = JSON.parse(record["payload_json"] || "{}")
+    payload_hash.merge(
+      JOB_APP_NAME => record["app_name"],
+      JOB_DIR_NAME => record["app_dir_name"],
+      HEADER_SCRIPT_LOCATION => record["script_location"],
+      HEADER_SCRIPT_NAME => record["script_name"],
+      JOB_NAME => record["job_name"].to_s.empty? ? payload_hash[HEADER_JOB_NAME] : record["job_name"],
+      JOB_PARTITION => record["partition"].to_s.empty? ? payload_hash["partition"] : record["partition"],
+      JOB_SUBMISSION_TIME => record["submission_time"],
+      JOB_STATUS_ID => record["status"]
+    )
+  end
+
+  # Ensure search_text matches the current history configuration.
+  def ensure_search_text_up_to_date(db, conf)
+    current_signature = build_history_signature(conf["history"])
+    return if get_metadata(db, "history_signature") == current_signature
+
+    db.transaction
+    begin
+      each_job(db) do |job|
+        payload_hash = JSON.parse(job["payload_json"] || "{}")
+        search_text = build_search_text(job, payload_hash, conf)
+        db.execute("UPDATE jobs SET search_text = ? WHERE job_id = ?", [search_text, job["job_id"]])
+      end
+      set_metadata(db, "history_signature", current_signature)
+      db.commit
+    rescue StandardError
+      db.rollback
+      raise
+    end
+  end
+
   # Update the status of all jobs that are not completed
   def update_status(conf, scheduler, bin, bin_overrides, ssh_wrapper, cluster_name)
-    queried_ids = []
-    db = PStore.new(get_history_db(conf, cluster_name))
-    db.transaction(true) do
-      db.roots.each do |id|
-        queried_ids << id if db[id][JOB_STATUS_ID] != JOB_STATUS["completed"] && db[id][JOB_STATUS_ID] != JOB_STATUS["failed"]
-      end
-    end
+    db = open_history_db(conf, cluster_name)
+    queried_ids = get_unfinished_job_ids(db)
     return nil if queried_ids.empty?
 
     scheduler     = cluster_name ? scheduler[cluster_name]     : scheduler
@@ -224,10 +571,28 @@ helpers do
 
     db.transaction do
       status.each do |id, info|
-        data = db[id]
-        next unless data
-        data[JOB_KEYS] = info.keys
-        db[id] = data.merge(info)
+        record = find_job(db, id)
+        next unless record
+
+        existing = job_record_to_legacy_hash(record)
+        scheduler_data = (info || {}).transform_keys(&:to_s)
+        scheduler_data["status"] = scheduler_data[JOB_STATUS_ID.to_s]
+        scheduler_data["script_location"] = scheduler_data[HEADER_SCRIPT_LOCATION.to_s]
+        scheduler_data["script_name"] = scheduler_data[HEADER_SCRIPT_NAME.to_s]
+        scheduler_data["job_name"] = scheduler_data[JOB_NAME.to_s]
+        scheduler_data["partition"] = scheduler_data[JOB_PARTITION.to_s]
+        scheduler_data["updated_time"] = Time.now.iso8601
+        scheduler_data[JOB_KEYS.to_s] = info.keys
+
+        upsert_job(
+          db,
+          build_job_record(
+            existing: existing,
+            submit_data: nil,
+            scheduler_data: scheduler_data,
+            conf: conf
+          )
+        )
       end
     end
 
@@ -237,37 +602,19 @@ helpers do
   # Return all jobs that match the specified status and filter.
   def get_all_jobs(conf, cluster_name, status, filter)
     jobs = []
-    db = PStore.new(get_history_db(conf, cluster_name))
-    db.transaction(true) do
-      db.roots.each do |id|
-        data = db[id]
-        next if status && status != "all" && data && data[JOB_STATUS_ID] != JOB_STATUS[status]
+    db = open_history_db(conf, cluster_name)
+    ensure_search_text_up_to_date(db, conf)
 
-        info = { JOB_ID => id }.merge(data)
-        if filter && !filter.empty?
-          filtered_keys = info[JOB_KEYS] - [JOB_NAME, JOB_PARTITION, JOB_STATUS_ID]
-          fields_to_search = [
-            info[JOB_ID],
-            filtered_keys,
-            info[JOB_APP_NAME],
-            info[HEADER_SCRIPT_LOCATION],
-            info[HEADER_SCRIPT_NAME],
-            info[OC_SCRIPT_CONTENT],
-            info[JOB_NAME],
-            info[JOB_PARTITION],
-            info[JOB_SUBMISSION_TIME]
-          ]
-          filtered_keys.each do |key|
-            fields_to_search << info[key]
-          end
-          next unless fields_to_search.any? { |v| v.to_s.include?(CGI.unescapeHTML(filter)) }
-        end
+    filter_text = CGI.unescapeHTML(filter.to_s).downcase
+    each_job(db) do |row|
+      next if status && status != "all" && row["status"] != JOB_STATUS[status]
+      next if !filter_text.empty? && !row["search_text"].to_s.include?(filter_text)
 
-        jobs << info
-      end
+      info = { JOB_ID => row["job_id"] }.merge(job_record_to_legacy_hash(row))
+      jobs << info
     end
 
-    return jobs.reverse
+    return jobs
   end
 
   # Output a styled status badge for a job based on its current status.
