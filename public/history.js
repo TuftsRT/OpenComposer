@@ -3,14 +3,60 @@ var ocHistory = ocHistory || {};
 // Apply filter based on the input value and update URL query parameters.
 ocHistory.applyFilter = function() {
   const filterInput = document.getElementById('_filterInput');
+  const filterModeInput = document.querySelector('input[name="filter_mode"]:checked');
+  const dateFromInput = document.getElementById('_historyDateFrom');
+  const dateToInput = document.getElementById('_historyDateTo');
+  const detailButton = document.getElementById('_historyAdvancedToggle');
   if (!filterInput) return;
 
   const filterText = filterInput.value;
   const urlParams = new URLSearchParams(window.location.search);
   urlParams.set('filter', filterText);
+  urlParams.delete('filter_mode');
+  urlParams.delete('date_from');
+  urlParams.delete('date_to');
+  urlParams.delete('detail_open');
+
+  if (filterModeInput && filterModeInput.value && filterModeInput.value !== 'and') {
+    urlParams.set('filter_mode', filterModeInput.value);
+  }
+
+  if (dateFromInput && dateFromInput.value) {
+    urlParams.set('date_from', dateFromInput.value);
+  }
+
+  if (dateToInput && dateToInput.value) {
+    urlParams.set('date_to', dateToInput.value);
+  }
+
+  if (detailButton && detailButton.getAttribute('aria-expanded') === 'true') {
+    urlParams.set('detail_open', 'true');
+  }
 
   window.location.href = `${window.location.pathname}?${urlParams.toString()}`;
 };
+
+// Toggle the detailed search area.
+ocHistory.toggleAdvancedSearch = function() {
+  const panel = document.getElementById('_historyAdvancedSearch');
+  const button = document.getElementById('_historyAdvancedToggle');
+  const icon = document.getElementById('_historyAdvancedToggleIcon');
+  if (!panel || !button || !icon) return;
+
+  const isHidden = panel.classList.contains('d-none');
+  panel.classList.toggle('d-none', !isHidden);
+  button.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+  button.classList.toggle('active', isHidden);
+  icon.classList.toggle('bi-chevron-down', !isHidden);
+  icon.classList.toggle('bi-chevron-up', isHidden);
+};
+
+ocHistory.advancedToggle = document.getElementById('_historyAdvancedToggle');
+if (ocHistory.advancedToggle) {
+  ocHistory.advancedToggle.addEventListener('click', function() {
+    ocHistory.toggleAdvancedSearch();
+  });
+}
 
 // Update the status of a batch operation (e.g., CancelJob, DeleteInfo) for selected jobs.
 ocHistory.updateStatusBatch = function(action, jobIds) {

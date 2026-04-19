@@ -28,12 +28,7 @@ helpers do
   # Output a modal for a specific action (e.g., CancelJob or DeleteInfo).
   def output_action_modal(action)
     id = "_history#{action}"
-    form_action = "#{@script_name}/history"
-    query_params = []
-    query_params << "cluster=#{@cluster_name}" if @cluster_name
-    query_params << "rows=#{@rows}" if @rows != HISTORY_ROWS
-    query_params << "p=#{@current_page}" if @current_page != 1
-    form_action += "?#{query_params.join('&')}" unless query_params.empty?
+    form_action = history_path_with_query
 
     <<~HTML
     <div class="modal" id="#{id}" aria-hidden="true" tabindex="-1">
@@ -133,9 +128,7 @@ helpers do
     elsif i == "..."
       "<li class=\"page-item\"><a href=\"#\" class=\"page-link\">...</a></li>\n"
     else
-      link = "./history?status=#{@status}&p=#{i}&rows=#{@rows}"
-      link += "&cluster=#{@cluster_name}" if @cluster_name
-      link += "&filter=#{@filter}" if @filter && !@filter.empty?
+      link = history_path_with_query(p: i, rows: rows)
       "<li class=\"page-item\"><a href=\"#{link}\" class=\"page-link\">#{i}</a></li>\n"
     end
   end
@@ -148,9 +141,7 @@ helpers do
     if current_page == 1
       html += "    <li class=\"page-item disabled\"><a href=\"#\" class=\"page-link\">&laquo;</a></li>\n"
     else
-      previous_link = "./history?status=#{@status}&p=#{current_page-1}&rows=#{@rows}"
-      previous_link += "&cluster=#{@cluster_name}" if @cluster_name
-      previous_link += "&filter=#{@filter}" if @filter && !@filter.empty?
+      previous_link = history_path_with_query(p: current_page - 1, rows: rows)
       html += "    <li class=\"page-item\"><a href=\"#{previous_link}\" class=\"page-link\">&laquo;</a></li>\n"
     end
 
@@ -181,14 +172,75 @@ helpers do
     if current_page == page_size
       html += "   <li class=\"page-item disabled\"><a href=\"#\" class=\"page-link\">&raquo;</a></li>\n"
     else
-      next_link = "./history?status=#{@status}&p=#{current_page+1}&rows=#{@rows}"
-      next_link += "&cluster=#{@cluster_name}" if @cluster_name
-      next_link += "&filter=#{@filter}" if @filter && !@filter.empty?
+      next_link = history_path_with_query(p: current_page + 1, rows: rows)
       html += "   <li class=\"page-item\"><a href=\"#{next_link}\" class=\"page-link\">&raquo;</a></li>\n"
     end
 
     html += "  </ul>\n"
     html += "</nav>\n"
+  end
+
+  # Build a history page path while preserving the current filters.
+  def history_path_with_query(overrides = {})
+    values = {
+      "status" => @status,
+      "filter" => @filter,
+      "filter_mode" => @filter_mode,
+      "date_from" => @date_from,
+      "date_to" => @date_to,
+      "detail_open" => @detail_open,
+      "rows" => @rows,
+      "p" => @current_page,
+      "cluster" => @cluster_name
+    }
+
+    overrides.each do |key, value|
+      values[key.to_s] = value
+    end
+
+    query_params = []
+    query_params << "status=#{values["status"]}" if values["status"] && values["status"] != "all"
+    query_params << "filter=#{values["filter"]}" if values["filter"] && !values["filter"].empty?
+    query_params << "filter_mode=#{values["filter_mode"]}" if values["filter_mode"] && values["filter_mode"] != "and"
+    query_params << "date_from=#{values["date_from"]}" if values["date_from"] && !values["date_from"].empty?
+    query_params << "date_to=#{values["date_to"]}" if values["date_to"] && !values["date_to"].empty?
+    query_params << "detail_open=true" if values["detail_open"] == "true"
+    query_params << "rows=#{values["rows"]}" if values["rows"] && values["rows"].to_i != HISTORY_ROWS
+    query_params << "p=#{values["p"]}" if values["p"] && values["p"].to_i != 1
+    query_params << "cluster=#{values["cluster"]}" if values["cluster"]
+
+    query_params.empty? ? "./history" : "./history?#{query_params.join('&')}"
+  end
+
+  # Return whether the submission time is within the specified date range.
+  def history_date_range_matches?(submission_time, date_from, date_to)
+    return true if date_from.to_s.empty? && date_to.to_s.empty?
+
+    normalized_time = normalize_time_for_db(submission_time)
+    return false if normalized_time.nil?
+
+    value = Time.parse(normalized_time)
+    from_time = date_from.to_s.empty? ? nil : Time.parse(date_from.to_s)
+    to_time = date_to.to_s.empty? ? nil : (Time.parse(date_to.to_s) + 86400)
+
+    return false if from_time && value < from_time
+    return false if to_time && value >= to_time
+
+    true
+  rescue ArgumentError
+    true
+  end
+
+  # Return whether the filter terms match according to the selected mode.
+  def history_filter_mode_matches?(search_text, filter_text, filter_mode)
+    terms = filter_text.to_s.split(/\s+/).reject(&:empty?)
+    return true if terms.empty?
+
+    if filter_mode == "or"
+      terms.any? { |term| search_text.to_s.include?(term) }
+    else
+      terms.all? { |term| search_text.to_s.include?(term) }
+    end
   end
 
   # Return history DB
@@ -600,7 +652,7 @@ helpers do
   end
 
   # Return all jobs that match the specified status and filter.
-  def get_all_jobs(conf, cluster_name, status, filter)
+  def get_all_jobs(conf, cluster_name, status, filter, date_from, date_to, filter_mode)
     jobs = []
     db = open_history_db(conf, cluster_name)
     ensure_search_text_up_to_date(db, conf)
@@ -608,7 +660,8 @@ helpers do
     filter_text = CGI.unescapeHTML(filter.to_s).downcase
     each_job(db) do |row|
       next if status && status != "all" && row["status"] != JOB_STATUS[status]
-      next if !filter_text.empty? && !row["search_text"].to_s.include?(filter_text)
+      next unless history_date_range_matches?(row["submission_time"], date_from, date_to)
+      next unless history_filter_mode_matches?(row["search_text"], filter_text, filter_mode)
 
       info = { JOB_ID => row["job_id"] }.merge(job_record_to_legacy_hash(row))
       jobs << info
