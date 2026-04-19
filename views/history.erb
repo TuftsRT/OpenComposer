@@ -21,8 +21,10 @@
           <div class="ms-auto my-3" style="max-width: 560px;">
             <div id="_historyAdvancedWrapper">
               <div class="input-group ms-auto" style="width: 420px;">
-                <span class="input-group-text">Filter</span>
                 <input type="text" class="form-control" aria-label="Filter" name="filter" value="<%= @filter %>" id="_filterInput">
+                <button class="btn btn-warning" type="submit" aria-label="Search">
+                  <i class="bi bi-search"></i>
+                </button>
                 <button
                   class="btn btn-secondary <%= advanced_open ? 'active' : '' %>"
                   type="button"
