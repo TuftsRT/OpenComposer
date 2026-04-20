@@ -485,15 +485,6 @@ helpers do
     Digest::SHA256.hexdigest(([search_version] + keys).join("\n"))
   end
 
-  # Return the normalized search key for a history field.
-  def normalize_history_search_key(key)
-    {
-      "OC_HISTORY_JOB_NAME" => "job_name",
-      "OC_HISTORY_PARTITION" => "partition",
-      "OC_HISTORY_SUBMISSION_TIME" => "submission_time"
-    }[key] || key
-  end
-
   # Return configured history fields as [key, label] pairs.
   def history_config_items(conf)
     history_items = conf["history"] || HISTORY_KEY_MAP.keys
@@ -513,7 +504,7 @@ helpers do
   end
 
   # Build search text from all stored job values, including payload_json content.
-  def build_search_text(record, payload_hash, conf)
+  def build_search_text(record, payload_hash)
     payload_hash ||= {}
     values = job_record_column_keys.flat_map do |key|
       history_search_values(record[key] || record[key.to_sym])
@@ -550,7 +541,7 @@ helpers do
 
     payload_hash = build_payload_hash(merged)
     record["payload_json"] = JSON.generate(payload_hash)
-    record["search_text"] = build_search_text(record, payload_hash, conf)
+    record["search_text"] = build_search_text(record, payload_hash)
     record
   end
 
@@ -644,7 +635,7 @@ helpers do
     begin
       each_job(db) do |job|
         payload_hash = JSON.parse(job["payload_json"] || "{}")
-        search_text = build_search_text(job, payload_hash, conf)
+        search_text = build_search_text(job, payload_hash)
         db.execute("UPDATE jobs SET search_text = ? WHERE job_id = ?", [search_text, job["job_id"]])
       end
       set_metadata(db, "history_signature", current_signature)
