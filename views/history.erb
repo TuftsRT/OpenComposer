@@ -18,7 +18,7 @@
       <div class="text-end">
         <div class="d-inline-block text-start" id="_historyFilterGroup">
         <form id="filterForm" onsubmit="ocHistory.applyFilter(); return false;" class="w-100">
-          <% advanced_open = (@detail_open == 'true') || ((@date_from && !@date_from.empty?) || (@date_to && !@date_to.empty?) || (@filter_mode && @filter_mode != 'and') || (@filter_column && @filter_column != 'all')) %>
+          <% advanced_open = (@detail_open == 'true') %>
           <div class="my-3 w-100">
             <div id="_historyAdvancedWrapper">
               <div class="input-group w-100">
@@ -76,6 +76,7 @@
                     class="form-control"
                     id="_historyDateTo"
                     name="date_to"
+                    max="<%= Date.today.strftime('%Y-%m-%d') %>"
                     <%= @date_to && !@date_to.empty? ? "value=\"#{@date_to}\"" : "" %>
                   >
                 </div>
