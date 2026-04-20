@@ -7,15 +7,32 @@ ocHistory.applyFilter = function() {
   const dateFromInput = document.getElementById('_historyDateFrom');
   const dateToInput = document.getElementById('_historyDateTo');
   const detailButton = document.getElementById('_historyAdvancedToggle');
+  const statusInputs = [
+    document.getElementById('_historyStatusRunning'),
+    document.getElementById('_historyStatusQueued'),
+    document.getElementById('_historyStatusCompleted'),
+    document.getElementById('_historyStatusFailed')
+  ].filter(Boolean);
   if (!filterInput) return;
 
   const filterText = filterInput.value;
+  const statuses = statusInputs
+    .filter(input => input.checked)
+    .map(input => input.value);
   const urlParams = new URLSearchParams(window.location.search);
   urlParams.set('filter', filterText);
+  urlParams.delete('statuses');
   urlParams.delete('filter_mode');
   urlParams.delete('date_from');
   urlParams.delete('date_to');
   urlParams.delete('detail_open');
+
+  if (statuses.length > 0) {
+    urlParams.set('statuses', statuses.join(' '));
+  }
+  else {
+    urlParams.set('statuses', 'nothing');
+  }
 
   if (filterModeInput && filterModeInput.value && filterModeInput.value !== 'and') {
     urlParams.set('filter_mode', filterModeInput.value);
@@ -138,16 +155,6 @@ ocHistory.redirectWithRows = function() {
   params.set('rows', selectedValue);
   window.location.href = url.toString();
 };
-
-// Add event listeners to status radio buttons and update the URL when a selection changes.
-document.querySelectorAll('input[name="_historyStatus"]').forEach(radio => {
-  radio.addEventListener('change', () => {
-    const url = new URL(window.location.href);
-    url.searchParams.set('status', radio.value);
-    url.searchParams.delete('p');
-    window.location.href = url.toString();
-  });
-});
 
 // Add event listeners to cluster radio buttons and update the URL when a selection changes.
 document.querySelectorAll('input[name="_historyCluster"]').forEach(radio => {

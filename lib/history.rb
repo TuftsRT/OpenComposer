@@ -181,9 +181,30 @@ helpers do
   end
 
   # Build a history page path while preserving the current filters.
+  def history_valid_statuses
+    %w[running queued completed failed]
+  end
+
+  def parse_history_statuses(raw_statuses)
+    return history_valid_statuses.dup if raw_statuses.nil?
+    return [] if raw_statuses == "nothing"
+
+    raw_statuses.to_s.split(/\s+/).map(&:strip).reject(&:empty?).select do |status|
+      history_valid_statuses.include?(status)
+    end
+  end
+
+  def serialize_history_statuses(statuses)
+    selected_statuses = Array(statuses).map(&:to_s).select { |status| history_valid_statuses.include?(status) }
+    return "nothing" if selected_statuses.empty?
+    return nil if selected_statuses.sort == history_valid_statuses.sort
+
+    selected_statuses.join(" ")
+  end
+
   def history_path_with_query(overrides = {})
     values = {
-      "status" => @status,
+      "statuses" => @statuses,
       "filter" => @filter,
       "filter_mode" => @filter_mode,
       "date_from" => @date_from,
@@ -199,7 +220,8 @@ helpers do
     end
 
     query_params = []
-    query_params << "status=#{values["status"]}" if values["status"] && values["status"] != "all"
+    serialized_statuses = serialize_history_statuses(values["statuses"])
+    query_params << "statuses=#{serialized_statuses}" if serialized_statuses
     query_params << "filter=#{values["filter"]}" if values["filter"] && !values["filter"].empty?
     query_params << "filter_mode=#{values["filter_mode"]}" if values["filter_mode"] && values["filter_mode"] != "and"
     query_params << "date_from=#{values["date_from"]}" if values["date_from"] && !values["date_from"].empty?
@@ -651,15 +673,17 @@ helpers do
     return nil
   end
 
-  # Return all jobs that match the specified status and filter.
-  def get_all_jobs(conf, cluster_name, status, filter, date_from, date_to, filter_mode)
+  # Return all jobs that match the specified statuses and filter.
+  def get_all_jobs(conf, cluster_name, statuses, filter, date_from, date_to, filter_mode)
     jobs = []
     db = open_history_db(conf, cluster_name)
     ensure_search_text_up_to_date(db, conf)
 
+    selected_statuses = Array(statuses).map(&:to_s)
     filter_text = CGI.unescapeHTML(filter.to_s).downcase
     each_job(db) do |row|
-      next if status && status != "all" && row["status"] != JOB_STATUS[status]
+      next if selected_statuses.empty?
+      next unless selected_statuses.any? { |status| row["status"] == JOB_STATUS[status] }
       next unless history_date_range_matches?(row["submission_time"], date_from, date_to)
       next unless history_filter_mode_matches?(row["search_text"], filter_text, filter_mode)
 
