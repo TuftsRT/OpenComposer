@@ -141,14 +141,11 @@ clusters:
 
       <h3 id="history">2.3. history</h3>
       <p>
-  The mandatory fields to be displayed on the history page are "Job ID", "Application", "Script Name", and "Status".
-  In addition to these, optional display fields can be configured.
-  This configuration is optional.
-      </p>
-      <p>
-  If nothing is specified in <code>history</code>, "Job Name", "Partition", and "Submission Time" are automatically set.
-  This is equivalent to the code shown below.
-  <code>OC_HISTORY_JOB_NAME</code>, <code>OC_HISTORY_PARTITION</code>, and <code>OC_HISTORY_SUBMISSION_TIME</code> are special variables that correspond to "Job Name", "Partition", and "Submission Time", respectively.
+        The mandatory fields to be displayed on the history page are "Job ID", "Application", "Script Location", "Script Name", and "Status".
+        In addition to these, the <code>history</code> allows you to set additional fields to display.
+        If this setting is omitted, "Job Name", "Partition", and "Submission Time" are automatically set.
+        This is equivalent to the code shown below.
+        <code>OC_HISTORY_JOB_NAME</code>, <code>OC_HISTORY_PARTITION</code>, and <code>OC_HISTORY_SUBMISSION_TIME</code> are special variables that correspond to "Job Name", "Partition", and "Submission Time", respectively.
       </p>
       <pre>history:
   OC_HISTORY_JOB_NAME:

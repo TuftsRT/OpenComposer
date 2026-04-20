@@ -140,10 +140,7 @@ clusters:
 
       <h3 id="history">2.3. history</h3>
       <p>
-  履歴ページの必須表示項目は「Job ID」、「Application」、「Script Name」、「Status」です。それに対して、追加表示項目を設定します。本設定は省略可能です。
-      </p>
-      <p>
-  <code>history</code>に何も設定しない場合、「Job Name」、「Partiton」、「Submission Time」が自動的に設定されます。下記のコードと同じです。<code>OC_HISTORY_JOB_NAME</code>、<code>OC_HISTORY_PARTITION</code>、<code>OC_HISTORY_SUBMISSION_TIME</code>は特殊な変数であり、「Job Name」、「Partiton」、「Submission Time」をそれぞれ指します。
+        履歴ページの必須表示項目は「Job ID」、「Application」、「Script Location」、「Script Name」、「Status」です。それに対して、<code>history</code>では追加表示項目を設定します。本設定を省略した場合、「Job Name」、「Partiton」、「Submission Time」が自動的に設定されます。下記のコードと同じです。<code>OC_HISTORY_JOB_NAME</code>、<code>OC_HISTORY_PARTITION</code>、<code>OC_HISTORY_SUBMISSION_TIME</code>は特殊な変数であり、「Job Name」、「Partiton」、「Submission Time」をそれぞれ指します。
       </p>
       <pre>history:
   OC_HISTORY_JOB_NAME:
