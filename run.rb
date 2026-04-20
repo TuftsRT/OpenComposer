@@ -537,6 +537,7 @@ get "/*" do
 end
 
 post "/*" do
+  # Keep POST handlers on the local conf object. @conf is initialized in show_website.
   conf          = create_conf
   cluster_name  = if conf.key?("clusters")
                     params[request.path_info == "/history" ? "cluster" : HEADER_CLUSTER_NAME] || conf["clusters"].keys.first
@@ -703,7 +704,7 @@ post "/*" do
 
     # Save a job history
     FileUtils.mkdir_p(data_dir)
-    db = open_history_db(@conf, @conf.key?("clusters") ? cluster_name : nil)
+    db = open_history_db(conf, conf.key?("clusters") ? cluster_name : nil)
     submission_time = params[JOB_SUBMISSION_TIME]
     submit_data = params.to_h.merge(
       "app_name" => params[JOB_APP_NAME],
@@ -722,11 +723,11 @@ post "/*" do
           existing: nil,
           submit_data: submit_data.merge("job_id" => id.to_s),
           scheduler_data: nil,
-          conf: @conf
+          conf: conf
         )
         upsert_job(db, record)
       end
-      set_metadata(db, "history_signature", build_history_signature(@conf["history"]))
+      set_metadata(db, "history_signature", build_history_signature(conf["history"]))
     end
 
     # Output log
