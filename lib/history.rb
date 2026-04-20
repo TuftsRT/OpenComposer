@@ -270,6 +270,15 @@ helpers do
     end
   end
 
+  # Return whether any search term appears in the given text.
+  def history_filter_hits_text?(text, filter)
+    terms = history_filter_terms(filter)
+    return false if terms.empty?
+
+    normalized_text = text.to_s.downcase
+    terms.any? { |term| normalized_text.include?(term.downcase) }
+  end
+
   # Return history DB
   def get_history_db(conf, cluster_name)
     db = conf["history_db"]
@@ -471,9 +480,14 @@ helpers do
     end
   end
 
+  # Return dedicated columns that should be included in search_text.
+  def search_text_column_keys
+    job_record_column_keys - %w[status]
+  end
+
   # Build a stable signature for history search configuration.
   def build_history_signature(history_conf)
-    search_version = "history-search-v4"
+    search_version = "history-search-v5"
     keys = Array(history_conf).map do |item|
       if item.is_a?(Hash)
         item.keys
@@ -506,7 +520,7 @@ helpers do
   # Build search text from all stored job values, including payload_json content.
   def build_search_text(record, payload_hash)
     payload_hash ||= {}
-    values = job_record_column_keys.flat_map do |key|
+    values = search_text_column_keys.flat_map do |key|
       history_search_values(record[key] || record[key.to_sym])
     end
     values.concat(history_search_values(payload_hash))
@@ -746,5 +760,20 @@ helpers do
            end
 
     return text.gsub("\n", "<br>")
+  end
+
+  # Return whether the Job Details modal contains a filter hit.
+  def job_details_modal_matches_filter?(job, filter)
+    return false if job[JOB_KEYS].nil?
+
+    filtered_keys = job[JOB_KEYS] - [JOB_NAME, JOB_PARTITION, JOB_STATUS_ID]
+    filtered_keys.any? do |key|
+      history_filter_hits_text?(key, filter) || history_filter_hits_text?(job[key], filter)
+    end
+  end
+
+  # Return whether the Job Script modal contains a filter hit.
+  def job_script_modal_matches_filter?(job, filter)
+    history_filter_hits_text?(job[OC_SCRIPT_CONTENT], filter)
   end
 end

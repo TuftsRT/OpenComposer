@@ -136,11 +136,13 @@
       <tbody class="text-center" id="_historyTbody">
         <% cached_related_apps = {} %>
         <% @jobs.each do |job| %>
+          <% job_details_modal_match = job_details_modal_matches_filter?(job, @filter) %>
+          <% job_script_modal_match = job_script_modal_matches_filter?(job, @filter) %>
           <tr data-status="<%= job[JOB_STATUS_ID] %>">
             <td class="table-primary">
               <input class="form-check-input" type="checkbox" id="ocJobId-<%= job[JOB_ID] %>" value="-1">
             </td>
-            <td class="text-wrap text-break text-end">
+            <td class="text-wrap text-break text-end <%= 'border border-2 border-warning' if job_details_modal_match %>">
               <a href="#" data-bs-toggle="modal" data-bs-target="#_historyJobId<%= job[JOB_ID] %>"><%= output_text(job[JOB_ID], @filter) %></a>
             </td>
             <td class="text-wrap text-break">
@@ -161,7 +163,7 @@
                 </a>
               <% end %>
             </td>
-            <td class="text-wrap text-break">
+            <td class="text-wrap text-break <%= 'border border-2 border-warning' if job_script_modal_match %>">
               <a href="#" data-bs-toggle="modal" data-bs-target="#_historyJobScript<%= job[JOB_ID] %>"><%= output_text(job[HEADER_SCRIPT_NAME], @filter) %></a>
             </td>
             <% @history_hash.each_key do |k| %>
