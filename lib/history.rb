@@ -97,7 +97,7 @@ helpers do
   # Output a modal displaying a job script and a link to load parameters for a specific job.
   def output_job_script_modal(job, filter)
     modal_id = "_historyJobScript#{job[JOB_ID]}"
-    job_link = "#{File.join(@script_name, job[JOB_DIR_NAME])}?jobId=#{URI.encode_www_form_component(job[JOB_ID])}"
+    job_link = "#{File.join(@script_name.to_s, job[JOB_DIR_NAME].to_s)}?jobId=#{URI.encode_www_form_component(job[JOB_ID].to_s)}"
     job_link += "&cluster=#{@cluster_name}" if @cluster_name
 
     <<~HTML
@@ -640,6 +640,25 @@ helpers do
     )
   end
 
+  # Parse payload_json and merge it back with dedicated columns using internal key names.
+  def job_record_to_internal_hash(record)
+    return nil unless record
+
+    payload_hash = JSON.parse(record["payload_json"] || "{}")
+    payload_hash.merge(
+      "job_id" => record["job_id"],
+      "app_name" => record["app_name"],
+      "app_dir_name" => record["app_dir_name"],
+      "script_location" => record["script_location"],
+      "script_name" => record["script_name"],
+      "job_name" => record["job_name"],
+      "partition" => record["partition"],
+      "submission_time" => record["submission_time"],
+      "updated_time" => record["updated_time"],
+      "status" => record["status"]
+    )
+  end
+
   # Ensure search_text matches the current history configuration.
   def ensure_search_text_up_to_date(db, conf)
     current_signature = build_history_signature(conf["history"])
@@ -680,7 +699,7 @@ helpers do
         record = find_job(db, id)
         next unless record
 
-        existing = job_record_to_legacy_hash(record)
+        existing = job_record_to_internal_hash(record)
         scheduler_data = (info || {}).transform_keys(&:to_s)
         scheduler_data["status"] = scheduler_data[JOB_STATUS_ID.to_s]
         scheduler_data["script_location"] = scheduler_data[HEADER_SCRIPT_LOCATION.to_s]
