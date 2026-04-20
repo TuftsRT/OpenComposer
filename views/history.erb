@@ -124,8 +124,8 @@
   </div>
 <% else %>
   <% @jobs.each do |job| %>
-    <%= output_job_id_modal(job, @filter) %>
-    <%= output_job_script_modal(job, @filter) %>
+    <%= output_job_id_modal(job, @filter, @filter_column) %>
+    <%= output_job_script_modal(job, @filter, @filter_column) %>
   <% end %>
 
   <div class="row px-3 table-responsive-sm">
@@ -146,17 +146,21 @@
       <tbody class="text-center" id="_historyTbody">
         <% cached_related_apps = {} %>
         <% @jobs.each do |job| %>
-          <% job_details_modal_match = job_details_modal_matches_filter?(job, @filter) %>
-          <% job_script_modal_match = job_script_modal_matches_filter?(job, @filter) %>
+          <% job_id_filter = history_highlight_filter(@filter, @filter_column, JOB_ID) %>
+          <% app_name_filter = history_highlight_filter(@filter, @filter_column, JOB_APP_NAME) %>
+          <% script_location_filter = history_highlight_filter(@filter, @filter_column, HEADER_SCRIPT_LOCATION) %>
+          <% script_name_filter = history_highlight_filter(@filter, @filter_column, HEADER_SCRIPT_NAME) %>
+          <% job_details_modal_match = job_details_modal_matches_filter?(job, job_id_filter) %>
+          <% job_script_modal_match = job_script_modal_matches_filter?(job, script_name_filter) %>
           <tr data-status="<%= job[JOB_STATUS_ID] %>">
             <td class="table-primary">
               <input class="form-check-input" type="checkbox" id="ocJobId-<%= job[JOB_ID] %>" value="-1">
             </td>
             <td class="text-wrap text-break text-end <%= 'border border-2 border-warning' if job_details_modal_match %>">
-              <a href="#" data-bs-toggle="modal" data-bs-target="#_historyJobId<%= job[JOB_ID] %>"><%= output_text(job[JOB_ID], @filter) %></a>
+              <a href="#" data-bs-toggle="modal" data-bs-target="#_historyJobId<%= job[JOB_ID] %>"><%= output_text(job[JOB_ID], job_id_filter) %></a>
             </td>
             <td class="text-wrap text-break">
-              <a href="<%= File.join(@script_name.to_s, job[JOB_DIR_NAME].to_s) %>"><%= output_text(job[JOB_APP_NAME], @filter) %></a>
+              <a href="<%= File.join(@script_name.to_s, job[JOB_DIR_NAME].to_s) %>"><%= output_text(job[JOB_APP_NAME], app_name_filter) %></a>
               <% directory_path = File.join(@apps_dir.to_s, job[JOB_DIR_NAME].to_s) %>
               <% unless cached_related_apps.key?(directory_path) %>
               <%   related_apps = create_manifest(directory_path)&.related_apps %>
@@ -167,7 +171,7 @@
               <% end %>
             </td>
             <td class="text-wrap text-break">
-              <a target="_blank" href="<%= @my_ood_url %>/pun/sys/dashboard/files/fs<%= job[HEADER_SCRIPT_LOCATION] %>"><%= output_text(job[HEADER_SCRIPT_LOCATION], @filter) %></a>
+              <a target="_blank" href="<%= @my_ood_url %>/pun/sys/dashboard/files/fs<%= job[HEADER_SCRIPT_LOCATION] %>"><%= output_text(job[HEADER_SCRIPT_LOCATION], script_location_filter) %></a>
               <% unless @login_node.nil? %>
                 <a style="color: black; text-decoration: none; vertical-align: middle;" target="_blank" href="<%= @my_ood_url %>/pun/sys/shell/ssh/<%= @login_node %>/<%= job[HEADER_SCRIPT_LOCATION] %>">
                   <i class="bi bi-terminal-fill fs-5"></i>
@@ -175,12 +179,12 @@
               <% end %>
             </td>
             <td class="text-wrap text-break <%= 'border border-2 border-warning' if job_script_modal_match %>">
-              <a href="#" data-bs-toggle="modal" data-bs-target="#_historyJobScript<%= job[JOB_ID] %>"><%= output_text(job[HEADER_SCRIPT_NAME], @filter) %></a>
+              <a href="#" data-bs-toggle="modal" data-bs-target="#_historyJobScript<%= job[JOB_ID] %>"><%= output_text(job[HEADER_SCRIPT_NAME], script_name_filter) %></a>
             </td>
             <% @history_hash.each_key do |k| %>
               <td class="text-wrap text-break d-none d-lg-table-cell">
                 <% key = HISTORY_KEY_MAP.fetch(k, k) %>
-                <%= output_text(format_history_table_value(key, job[key]), @filter) %>
+                <%= output_text(format_history_table_value(key, job[key]), history_highlight_filter(@filter, @filter_column, key)) %>
               </td>
             <% end %>
             <td class="text-wrap text-break"><%= output_status(job[JOB_STATUS_ID]) %></td>

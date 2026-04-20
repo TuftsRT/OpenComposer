@@ -1,4 +1,5 @@
 
+
 helpers do
   # Generate HTML for icons linking to related applications.
   def output_related_apps_icon(job_app_path, apps)
@@ -65,7 +66,7 @@ helpers do
   end
 
   # Output a modal for displaying details of a specific job.
-  def output_job_id_modal(job, filter)
+  def output_job_id_modal(job, filter, filter_column = "all")
     return if job[JOB_KEYS].nil? # If a job has just been submitted, it may not have been registered yet.
 
     modal_id = "_historyJobId#{job[JOB_ID]}"
@@ -83,7 +84,8 @@ helpers do
 
     filtered_keys = job[JOB_KEYS] - [JOB_NAME, JOB_PARTITION, JOB_STATUS_ID]
     filtered_keys.each do |key|
-      html += "<tr><td>#{output_text(key, filter)}</td><td>#{output_text(job[key], filter)}</td></tr>\n"
+      row_filter = history_highlight_filter(filter, filter_column, key)
+      html += "<tr><td>#{output_text(key, row_filter)}</td><td>#{output_text(job[key], row_filter)}</td></tr>\n"
     end
 
     html += <<~HTML
@@ -96,10 +98,11 @@ helpers do
   end
 
   # Output a modal displaying a job script and a link to load parameters for a specific job.
-  def output_job_script_modal(job, filter)
+  def output_job_script_modal(job, filter, filter_column = "all")
     modal_id = "_historyJobScript#{job[JOB_ID]}"
     job_link = "#{File.join(@script_name.to_s, job[JOB_DIR_NAME].to_s)}?jobId=#{URI.encode_www_form_component(job[JOB_ID].to_s)}"
     job_link += "&cluster=#{@cluster_name}" if @cluster_name
+    script_filter = history_highlight_filter(filter, filter_column, HEADER_SCRIPT_NAME)
 
     <<~HTML
     <div class="modal" aria-hidden="true" id="#{modal_id}" tabindex="-1">
@@ -110,7 +113,7 @@ helpers do
             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
           </div>
           <div class="modal-body">
-            #{output_text(job[OC_SCRIPT_CONTENT], filter)}
+            #{output_text(job[OC_SCRIPT_CONTENT], script_filter)}
           </div>
           <div class="modal-footer">
             <a href="#{job_link}" class="btn btn-primary text-white text-decoration-none">Load parameters</a>
@@ -554,6 +557,13 @@ helpers do
     job = { JOB_ID => row["job_id"] }.merge(job_record_to_legacy_hash(row))
     value = job[filter_column]
     value.nil? ? "" : value.to_s.downcase
+  end
+
+  # Return the filter text only when the selected column should be highlighted.
+  def history_highlight_filter(filter, filter_column, column_key)
+    return filter if filter_column == "all" || filter_column == column_key
+
+    nil
   end
 
   # Build search text from all stored job values, including payload_json content.
