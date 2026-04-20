@@ -124,8 +124,8 @@
   </div>
 <% else %>
   <% @jobs.each do |job| %>
-    <%= output_job_id_modal(job, @filter, @filter_column) %>
-    <%= output_job_script_modal(job, @filter, @filter_column) %>
+    <%= output_job_id_modal(job, @filter) %>
+    <%= output_job_script_modal(job, @filter) %>
   <% end %>
 
   <div class="row px-3 table-responsive-sm">

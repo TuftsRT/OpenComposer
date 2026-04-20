@@ -66,7 +66,7 @@ helpers do
   end
 
   # Output a modal for displaying details of a specific job.
-  def output_job_id_modal(job, filter, filter_column = "all")
+  def output_job_id_modal(job, filter)
     return if job[JOB_KEYS].nil? # If a job has just been submitted, it may not have been registered yet.
 
     modal_id = "_historyJobId#{job[JOB_ID]}"
@@ -84,8 +84,7 @@ helpers do
 
     filtered_keys = job[JOB_KEYS] - [JOB_NAME, JOB_PARTITION, JOB_STATUS_ID]
     filtered_keys.each do |key|
-      row_filter = history_highlight_filter(filter, filter_column, key)
-      html += "<tr><td>#{output_text(key, row_filter)}</td><td>#{output_text(job[key], row_filter)}</td></tr>\n"
+      html += "<tr><td>#{output_text(key, filter)}</td><td>#{output_text(job[key], filter)}</td></tr>\n"
     end
 
     html += <<~HTML
@@ -98,11 +97,10 @@ helpers do
   end
 
   # Output a modal displaying a job script and a link to load parameters for a specific job.
-  def output_job_script_modal(job, filter, filter_column = "all")
+  def output_job_script_modal(job, filter)
     modal_id = "_historyJobScript#{job[JOB_ID]}"
     job_link = "#{File.join(@script_name.to_s, job[JOB_DIR_NAME].to_s)}?jobId=#{URI.encode_www_form_component(job[JOB_ID].to_s)}"
     job_link += "&cluster=#{@cluster_name}" if @cluster_name
-    script_filter = history_highlight_filter(filter, filter_column, HEADER_SCRIPT_NAME)
 
     <<~HTML
     <div class="modal" aria-hidden="true" id="#{modal_id}" tabindex="-1">
@@ -113,7 +111,7 @@ helpers do
             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
           </div>
           <div class="modal-body">
-            #{output_text(job[OC_SCRIPT_CONTENT], script_filter)}
+            #{output_text(job[OC_SCRIPT_CONTENT], filter)}
           </div>
           <div class="modal-footer">
             <a href="#{job_link}" class="btn btn-primary text-white text-decoration-none">Load parameters</a>
@@ -555,13 +553,24 @@ helpers do
     return row["search_text"] if filter_column == "all"
 
     job = { JOB_ID => row["job_id"] }.merge(job_record_to_legacy_hash(row))
+    if filter_column == JOB_ID
+      detail_values = Array(job[JOB_KEYS]).flat_map do |key|
+        [key, job[key]]
+      end
+      return ([job[JOB_ID]] + detail_values).compact.join(" ").downcase
+    end
+
+    if filter_column == HEADER_SCRIPT_NAME
+      return [job[HEADER_SCRIPT_NAME], job[OC_SCRIPT_CONTENT]].compact.join(" ").downcase
+    end
+
     value = job[filter_column]
     value.nil? ? "" : value.to_s.downcase
   end
 
   # Return the filter text only when the selected column should be highlighted.
   def history_highlight_filter(filter, filter_column, column_key)
-    return filter if filter_column == "all" || filter_column == column_key
+    return filter if filter_column.to_s == "all" || filter_column.to_s == column_key.to_s
 
     nil
   end

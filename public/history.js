@@ -28,6 +28,7 @@ ocHistory.applyFilter = function() {
   urlParams.delete('date_from');
   urlParams.delete('date_to');
   urlParams.delete('detail_open');
+  urlParams.delete('p');
 
   if (statuses.length > 0) {
     urlParams.set('statuses', statuses.join(' '));
