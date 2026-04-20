@@ -346,11 +346,7 @@ def show_website(job_id = nil, error_msg = nil, error_params = nil, script_path 
     @jobs         = @start_index >= @jobs_size ? [] : all_jobs[@start_index..@end_index]
     @error_msg    = error_msg
 
-    @history_hash = @conf["history"].each_with_object({}) do |(key, opt), h|
-      key = key.to_s
-      label = opt && opt["label"] || HISTORY_KEY_MAP.fetch(key, key)
-      h[key] = label
-    end
+    @history_hash = history_config_items(@conf).to_h
 
     return erb :history
   else # application form

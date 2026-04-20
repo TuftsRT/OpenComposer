@@ -234,6 +234,11 @@ helpers do
     query_params.empty? ? "./history" : "./history?#{query_params.join('&')}"
   end
 
+  # Split the filter text into search terms.
+  def history_filter_terms(filter_text)
+    filter_text.to_s.split(/\s+/).reject(&:empty?)
+  end
+
   # Return whether the submission time is within the specified date range.
   def history_date_range_matches?(submission_time, date_from, date_to)
     return true if date_from.to_s.empty? && date_to.to_s.empty?
@@ -255,7 +260,7 @@ helpers do
 
   # Return whether the filter terms match according to the selected mode.
   def history_filter_mode_matches?(search_text, filter_text, filter_mode)
-    terms = filter_text.to_s.split(/\s+/).reject(&:empty?)
+    terms = history_filter_terms(filter_text)
     return true if terms.empty?
 
     if filter_mode == "or"
@@ -452,8 +457,23 @@ helpers do
     end
   end
 
+  # Flatten nested values into an array of searchable scalar values.
+  def history_search_values(value)
+    case value
+    when nil
+      []
+    when Array
+      value.flat_map { |item| history_search_values(item) }
+    when Hash
+      value.values.flat_map { |item| history_search_values(item) }
+    else
+      [value]
+    end
+  end
+
   # Build a stable signature for history search configuration.
   def build_history_signature(history_conf)
+    search_version = "history-search-v4"
     keys = Array(history_conf).map do |item|
       if item.is_a?(Hash)
         item.keys
@@ -462,7 +482,7 @@ helpers do
       end
     end.flatten.compact.map(&:to_s).sort
 
-    Digest::SHA256.hexdigest(keys.join("\n"))
+    Digest::SHA256.hexdigest(([search_version] + keys).join("\n"))
   end
 
   # Return the normalized search key for a history field.
@@ -474,24 +494,31 @@ helpers do
     }[key] || key
   end
 
-  # Build the search text from mandatory fields and configured history fields.
+  # Return configured history fields as [key, label] pairs.
+  def history_config_items(conf)
+    history_items = conf["history"] || HISTORY_KEY_MAP.keys
+
+    Array(history_items).each_with_object([]) do |item, items|
+      if item.is_a?(Hash)
+        item.each do |key, opt|
+          normalized_key = key.to_s
+          label = opt && opt["label"] || HISTORY_KEY_MAP.fetch(normalized_key, normalized_key)
+          items << [normalized_key, label]
+        end
+      else
+        normalized_key = item.to_s
+        items << [normalized_key, HISTORY_KEY_MAP.fetch(normalized_key, normalized_key)]
+      end
+    end
+  end
+
+  # Build search text from all stored job values, including payload_json content.
   def build_search_text(record, payload_hash, conf)
     payload_hash ||= {}
-
-    mandatory_keys = %w[job_id app_name script_name status]
-    configured_keys = Array(conf["history"]).map do |item|
-      if item.is_a?(Hash)
-        item.keys
-      else
-        item
-      end
-    end.flatten.compact.map { |key| normalize_history_search_key(key.to_s) }
-
-    keys = (mandatory_keys + configured_keys).uniq - %w[submission_time updated_time]
-    values = keys.flat_map do |key|
-      value = record[key] || record[key.to_sym] || payload_hash[key]
-      Array(value)
+    values = job_record_column_keys.flat_map do |key|
+      history_search_values(record[key] || record[key.to_sym])
     end
+    values.concat(history_search_values(payload_hash))
 
     values
       .compact
@@ -714,11 +741,17 @@ helpers do
 
   # Return the value for the cell with the filter highlighted.
   def output_text(text, filter)
-    text = if text.nil? || filter.nil? || filter.empty?
+    terms = history_filter_terms(filter)
+
+    text = if text.nil? || terms.empty?
              escape_html(text)
            else
              # If it is not replaced after escape, the replacement tag will be escaped.
-             escape_html(text).gsub(/(#{Regexp.escape(filter)})/i, '<span class="bg-warning text-dark">\1</span>')
+             highlighted_text = escape_html(text)
+             terms.uniq.sort_by { |term| -term.length }.each do |term|
+               highlighted_text = highlighted_text.gsub(/(#{Regexp.escape(term)})/i, '<span class="bg-warning text-dark">\1</span>')
+             end
+             highlighted_text
            end
 
     return text.gsub("\n", "<br>")
