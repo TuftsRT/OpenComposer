@@ -3,6 +3,7 @@ var ocHistory = ocHistory || {};
 // Apply filter based on the input value and update URL query parameters.
 ocHistory.applyFilter = function() {
   const filterInput = document.getElementById('_filterInput');
+  const filterColumnInput = document.getElementById('_historyFilterColumn');
   const filterModeInput = document.querySelector('input[name="filter_mode"]:checked');
   const dateFromInput = document.getElementById('_historyDateFrom');
   const dateToInput = document.getElementById('_historyDateTo');
@@ -22,6 +23,7 @@ ocHistory.applyFilter = function() {
   const urlParams = new URLSearchParams(window.location.search);
   urlParams.set('filter', filterText);
   urlParams.delete('statuses');
+  urlParams.delete('filter_column');
   urlParams.delete('filter_mode');
   urlParams.delete('date_from');
   urlParams.delete('date_to');
@@ -32,6 +34,10 @@ ocHistory.applyFilter = function() {
   }
   else {
     urlParams.set('statuses', 'nothing');
+  }
+
+  if (filterColumnInput && filterColumnInput.value) {
+    urlParams.set('filter_column', filterColumnInput.value);
   }
 
   if (filterModeInput && filterModeInput.value && filterModeInput.value !== 'and') {

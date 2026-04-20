@@ -1,3 +1,4 @@
+
 helpers do
   # Generate HTML for icons linking to related applications.
   def output_related_apps_icon(job_app_path, apps)
@@ -206,6 +207,7 @@ helpers do
     values = {
       "statuses" => @statuses,
       "filter" => @filter,
+      "filter_column" => @filter_column,
       "filter_mode" => @filter_mode,
       "date_from" => @date_from,
       "date_to" => @date_to,
@@ -223,6 +225,7 @@ helpers do
     serialized_statuses = serialize_history_statuses(values["statuses"])
     query_params << "statuses=#{serialized_statuses}" if serialized_statuses
     query_params << "filter=#{values["filter"]}" if values["filter"] && !values["filter"].empty?
+    query_params << "filter_column=#{values["filter_column"]}" if values["filter_column"] && values["filter_column"] != "all"
     query_params << "filter_mode=#{values["filter_mode"]}" if values["filter_mode"] && values["filter_mode"] != "and"
     query_params << "date_from=#{values["date_from"]}" if values["date_from"] && !values["date_from"].empty?
     query_params << "date_to=#{values["date_to"]}" if values["date_to"] && !values["date_to"].empty?
@@ -517,6 +520,42 @@ helpers do
     end
   end
 
+  # Return searchable History table columns in display order.
+  def history_filter_column_items(conf)
+    items = [
+      ["all", "(ALL)"],
+      [JOB_ID, "Job ID"],
+      [JOB_APP_NAME, "Application"],
+      [HEADER_SCRIPT_LOCATION, "Script Location"],
+      [HEADER_SCRIPT_NAME, "Script Name"]
+    ]
+
+    history_config_items(conf).each do |key, label|
+      items << [HISTORY_KEY_MAP.fetch(key, key), label]
+    end
+
+    items
+  end
+
+  # Return the selected history filter column if valid.
+  def parse_history_filter_column(raw_filter_column, conf)
+    valid_columns = history_filter_column_items(conf).map(&:first)
+    selected_column = raw_filter_column.to_s
+    return "all" if selected_column.empty?
+    return selected_column if valid_columns.include?(selected_column)
+
+    "all"
+  end
+
+  # Return search text for the selected History table column.
+  def history_filter_target_text(row, filter_column)
+    return row["search_text"] if filter_column == "all"
+
+    job = { JOB_ID => row["job_id"] }.merge(job_record_to_legacy_hash(row))
+    value = job[filter_column]
+    value.nil? ? "" : value.to_s.downcase
+  end
+
   # Build search text from all stored job values, including payload_json content.
   def build_search_text(record, payload_hash)
     payload_hash ||= {}
@@ -725,7 +764,7 @@ helpers do
   end
 
   # Return all jobs that match the specified statuses and filter.
-  def get_all_jobs(conf, cluster_name, statuses, filter, date_from, date_to, filter_mode)
+  def get_all_jobs(conf, cluster_name, statuses, filter, filter_column, date_from, date_to, filter_mode)
     jobs = []
     db = open_history_db(conf, cluster_name)
     ensure_search_text_up_to_date(db, conf)
@@ -736,7 +775,7 @@ helpers do
       next if selected_statuses.empty?
       next unless selected_statuses.any? { |status| row["status"] == JOB_STATUS[status] }
       next unless history_date_range_matches?(row["submission_time"], date_from, date_to)
-      next unless history_filter_mode_matches?(row["search_text"], filter_text, filter_mode)
+      next unless history_filter_mode_matches?(history_filter_target_text(row, filter_column), filter_text, filter_mode)
 
       info = { JOB_ID => row["job_id"] }.merge(job_record_to_legacy_hash(row))
       jobs << info
@@ -779,6 +818,15 @@ helpers do
            end
 
     return text.gsub("\n", "<br>")
+  end
+
+  # Format values for the History table without changing stored data.
+  def format_history_table_value(key, value)
+    return value unless key == JOB_SUBMISSION_TIME
+
+    Time.parse(value.to_s).strftime("%Y-%m-%d %H:%M:%S")
+  rescue ArgumentError
+    value
   end
 
   # Return whether the Job Details modal contains a filter hit.
