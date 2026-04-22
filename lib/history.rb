@@ -65,6 +65,27 @@ helpers do
     HTML
   end
 
+  # Output compact ascending/descending sort controls for a History table column.
+  def output_history_sort_controls(sort_key)
+    asc_class = ["history-sort-link", (@sort == sort_key && @order == "asc" ? "history-sort-active" : nil)].compact.join(" ")
+    desc_class = ["history-sort-link", (@sort == sort_key && @order == "desc" ? "history-sort-active" : nil)].compact.join(" ")
+
+    <<~HTML
+    <span class="history-sort-controls">
+      <a
+        href="#{history_path_with_query(sort: sort_key, order: 'asc', p: 1)}"
+        class="#{asc_class}"
+        aria-label="Sort #{sort_key} ascending"
+      ><span class="history-sort-icon">&#9650;</span></a>
+      <a
+        href="#{history_path_with_query(sort: sort_key, order: 'desc', p: 1)}"
+        class="#{desc_class}"
+        aria-label="Sort #{sort_key} descending"
+      ><span class="history-sort-icon">&#9660;</span></a>
+    </span>
+    HTML
+  end
+
   # Output a modal for displaying details of a specific job.
   def output_job_id_modal(job, filter)
     return if job[JOB_KEYS].nil? # If a job has just been submitted, it may not have been registered yet.
@@ -209,6 +230,8 @@ helpers do
       "statuses" => @statuses,
       "filter" => @filter,
       "filter_column" => @filter_column,
+      "sort" => @sort,
+      "order" => @order,
       "date_range" => @date_range,
       "filter_mode" => @filter_mode,
       "date_from" => @date_from,
@@ -228,6 +251,8 @@ helpers do
     query_params << "statuses=#{serialized_statuses}" if serialized_statuses
     query_params << "filter=#{values["filter"]}" if values["filter"] && !values["filter"].empty?
     query_params << "filter_column=#{values["filter_column"]}" if values["filter_column"] && values["filter_column"] != "all"
+    query_params << "sort=#{values["sort"]}" if values["sort"] && !values["sort"].empty?
+    query_params << "order=#{values["order"]}" if values["order"] && !values["order"].empty?
     query_params << "date_range=#{values["date_range"]}" if values["date_range"] && values["date_range"] != "all"
     query_params << "filter_mode=#{values["filter_mode"]}" if values["filter_mode"] && values["filter_mode"] != "and"
     if values["date_range"] == "custom"
@@ -245,6 +270,25 @@ helpers do
   # Split the filter text into search terms.
   def history_filter_terms(filter_text)
     filter_text.to_s.split(/\s+/).reject(&:empty?)
+  end
+
+  # Return the selected History sort key if valid.
+  def parse_history_sort(raw_sort, conf)
+    sort = raw_sort.to_s
+    # History page defaults to Job ID order, so an empty sort parameter
+    # is normalized to the internal Job ID key instead of "".
+    return JOB_ID if sort.empty?
+
+    valid_columns = history_sort_column_items(conf).map(&:first)
+    valid_columns.include?(sort) ? sort : JOB_ID
+  end
+
+  # Return the selected History sort order if valid.
+  def parse_history_order(raw_order)
+    order = raw_order.to_s
+    return "desc" if order.empty?
+
+    %w[asc desc].include?(order) ? order : "desc"
   end
 
   # Return available date range presets for the History search UI.
@@ -322,6 +366,32 @@ helpers do
       [$1.to_i, $2.to_i, value]
     else
       [Float::INFINITY, Float::INFINITY, value]
+    end
+  end
+
+  # Return a stable sort key for the selected History sort column.
+  def history_sort_key(job, sort)
+    case sort
+    when JOB_ID
+      history_job_id_sort_key(job[JOB_ID])
+    when JOB_APP_NAME
+      [job[JOB_APP_NAME].to_s.downcase, *history_job_id_sort_key(job[JOB_ID])]
+    when HEADER_SCRIPT_LOCATION
+      [job[HEADER_SCRIPT_LOCATION].to_s.downcase, *history_job_id_sort_key(job[JOB_ID])]
+    when HEADER_SCRIPT_NAME
+      [job[HEADER_SCRIPT_NAME].to_s.downcase, *history_job_id_sort_key(job[JOB_ID])]
+    when JOB_STATUS_ID
+      status_order = {
+        JOB_STATUS["queued"] => 0,
+        JOB_STATUS["running"] => 1,
+        JOB_STATUS["completed"] => 2,
+        JOB_STATUS["failed"] => 3
+      }
+      [status_order.fetch(job[JOB_STATUS_ID], 99), *history_job_id_sort_key(job[JOB_ID])]
+    when JOB_SUBMISSION_TIME
+      [normalize_time_for_db(job[JOB_SUBMISSION_TIME]) || "", *history_job_id_sort_key(job[JOB_ID])]
+    else
+      [job[sort].to_s.downcase, *history_job_id_sort_key(job[JOB_ID])]
     end
   end
 
@@ -468,7 +538,7 @@ helpers do
 
   # Yield each job record.
   def each_job(db, &block)
-    db.execute("SELECT * FROM jobs ORDER BY submission_time DESC, job_id DESC", &block)
+    db.execute("SELECT * FROM jobs", &block)
   end
 
   # Return all unfinished job IDs.
@@ -592,6 +662,23 @@ helpers do
       [JOB_APP_NAME, "Application"],
       [HEADER_SCRIPT_LOCATION, "Script Location"],
       [HEADER_SCRIPT_NAME, "Script Name / Job Script"]
+    ]
+
+    history_config_items(conf).each do |key, label|
+      items << [HISTORY_KEY_MAP.fetch(key, key), label]
+    end
+
+    items
+  end
+
+  # Return sortable History table columns in display order.
+  def history_sort_column_items(conf)
+    items = [
+      [JOB_ID, "Job ID"],
+      [JOB_APP_NAME, "Application"],
+      [HEADER_SCRIPT_LOCATION, "Script Location"],
+      [HEADER_SCRIPT_NAME, "Script Name"],
+      [JOB_STATUS_ID, "Status"]
     ]
 
     history_config_items(conf).each do |key, label|
@@ -846,7 +933,7 @@ helpers do
   end
 
   # Return all jobs that match the specified statuses and filter.
-  def get_all_jobs(conf, cluster_name, statuses, filter, filter_column, date_from, date_to, filter_mode)
+  def get_all_jobs(conf, cluster_name, statuses, filter, filter_column, date_from, date_to, filter_mode, sort = "", order = "")
     jobs = []
     db = open_history_db(conf, cluster_name)
     ensure_search_text_up_to_date(db, conf)
@@ -863,11 +950,8 @@ helpers do
       jobs << info
     end
 
-    jobs.sort_by! do |job|
-      submission_time = normalize_time_for_db(job[JOB_SUBMISSION_TIME]) || ""
-      job_id_main, job_id_sub, job_id_text = history_job_id_sort_key(job[JOB_ID])
-      [submission_time, job_id_main, job_id_sub, job_id_text]
-    end.reverse!
+    jobs.sort_by! { |job| history_sort_key(job, sort) }
+    jobs.reverse! if order == "desc"
 
     return jobs
   end
