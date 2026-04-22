@@ -333,8 +333,9 @@ def show_website(job_id = nil, error_msg = nil, error_params = nil, script_path 
     @statuses     = parse_history_statuses(params["statuses"])
     @filter       = escape_html(params["filter"])
     @filter_column = parse_history_filter_column(params["filter_column"], @conf)
-    @date_from    = escape_html(params["date_from"])
-    @date_to      = escape_html(params["date_to"])
+    @date_range, raw_date_from, raw_date_to = parse_history_date_range(params["date_range"], params["date_from"], params["date_to"])
+    @date_from    = escape_html(raw_date_from)
+    @date_to      = escape_html(raw_date_to)
     @filter_mode  = escape_html(params["filter_mode"] || "and")
     @detail_open  = escape_html(params["detail_open"] || "false")
     all_jobs      = get_all_jobs(@conf, @cluster_name, @statuses, @filter, @filter_column, @date_from, @date_to, @filter_mode)
@@ -349,6 +350,7 @@ def show_website(job_id = nil, error_msg = nil, error_params = nil, script_path 
 
     @history_hash = history_config_items(@conf).to_h
     @filter_column_items = history_filter_column_items(@conf)
+    @date_range_items = history_date_range_items
 
     return erb :history
   else # application form

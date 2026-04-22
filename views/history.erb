@@ -50,7 +50,7 @@
               </div>
               <div class="mt-2">
                 <div class="input-group">
-                  <label class="input-group-text" for="_historyFilterColumn">Field</label>
+                  <label class="input-group-text history-search-label" for="_historyFilterColumn">Field</label>
                   <select class="form-select" id="_historyFilterColumn" name="filter_column">
                     <% @filter_column_items.each do |value, label| %>
                       <option value="<%= value %>" <%= 'selected' if @filter_column == value %>><%= label %></option>
@@ -58,9 +58,19 @@
                   </select>
                 </div>
               </div>
-              <div class="d-flex justify-content-between gap-2 mt-2">
+              <div class="mt-3">
                 <div class="input-group">
-                  <label class="input-group-text" for="_historyDateFrom">From</label>
+                  <label class="input-group-text history-search-label" for="_historyDateRange">Range</label>
+                  <select class="form-select" id="_historyDateRange" name="date_range">
+                    <% @date_range_items.each do |value, label| %>
+                      <option value="<%= value %>" <%= 'selected' if @date_range == value %>><%= label %></option>
+                    <% end %>
+                  </select>
+                </div>
+              </div>
+              <div id="_historyCustomDates" class="d-flex justify-content-between gap-2 mt-3 <%= @date_range == 'custom' ? '' : 'd-none' %>">
+                <div class="input-group">
+                  <label class="input-group-text history-search-label" for="_historyDateFrom">From</label>
                   <input
                     type="date"
                     class="form-control"
@@ -70,7 +80,7 @@
                   >
                 </div>
                 <div class="input-group">
-                  <label class="input-group-text" for="_historyDateTo">To</label>
+                  <label class="input-group-text history-search-label" for="_historyDateTo">To</label>
                   <input
                     type="date"
                     class="form-control"

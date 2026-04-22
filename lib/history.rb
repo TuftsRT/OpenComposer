@@ -209,6 +209,7 @@ helpers do
       "statuses" => @statuses,
       "filter" => @filter,
       "filter_column" => @filter_column,
+      "date_range" => @date_range,
       "filter_mode" => @filter_mode,
       "date_from" => @date_from,
       "date_to" => @date_to,
@@ -227,9 +228,12 @@ helpers do
     query_params << "statuses=#{serialized_statuses}" if serialized_statuses
     query_params << "filter=#{values["filter"]}" if values["filter"] && !values["filter"].empty?
     query_params << "filter_column=#{values["filter_column"]}" if values["filter_column"] && values["filter_column"] != "all"
+    query_params << "date_range=#{values["date_range"]}" if values["date_range"] && values["date_range"] != "all"
     query_params << "filter_mode=#{values["filter_mode"]}" if values["filter_mode"] && values["filter_mode"] != "and"
-    query_params << "date_from=#{values["date_from"]}" if values["date_from"] && !values["date_from"].empty?
-    query_params << "date_to=#{values["date_to"]}" if values["date_to"] && !values["date_to"].empty?
+    if values["date_range"] == "custom"
+      query_params << "date_from=#{values["date_from"]}" if values["date_from"] && !values["date_from"].empty?
+      query_params << "date_to=#{values["date_to"]}" if values["date_to"] && !values["date_to"].empty?
+    end
     query_params << "detail_open=true" if values["detail_open"] == "true"
     query_params << "rows=#{values["rows"]}" if values["rows"] && values["rows"].to_i != HISTORY_ROWS
     query_params << "p=#{values["p"]}" if values["p"] && values["p"].to_i != 1
@@ -241,6 +245,43 @@ helpers do
   # Split the filter text into search terms.
   def history_filter_terms(filter_text)
     filter_text.to_s.split(/\s+/).reject(&:empty?)
+  end
+
+  # Return available date range presets for the History search UI.
+  def history_date_range_items
+    [
+      ["all", "(ALL)"],
+      ["today", "Today"],
+      ["yesterday", "Yesterday and Today"],
+      ["last7", "Last 7 days"],
+      ["last30", "Last 30 days"],
+      ["custom", "Custom"]
+    ]
+  end
+
+  # Normalize the date range selection into UI state and actual date bounds.
+  def parse_history_date_range(raw_date_range, raw_date_from, raw_date_to)
+    date_range = raw_date_range.to_s
+    date_range = "custom" if date_range.empty? && (!raw_date_from.to_s.empty? || !raw_date_to.to_s.empty?)
+    date_range = "all" if date_range.empty?
+    valid_ranges = history_date_range_items.map(&:first)
+    date_range = "all" unless valid_ranges.include?(date_range)
+
+    today = Date.today
+    case date_range
+    when "today"
+      [date_range, today.strftime("%Y-%m-%d"), today.strftime("%Y-%m-%d")]
+    when "yesterday"
+      [date_range, (today - 1).strftime("%Y-%m-%d"), today.strftime("%Y-%m-%d")]
+    when "last7"
+      [date_range, (today - 6).strftime("%Y-%m-%d"), today.strftime("%Y-%m-%d")]
+    when "last30"
+      [date_range, (today - 29).strftime("%Y-%m-%d"), today.strftime("%Y-%m-%d")]
+    when "custom"
+      [date_range, raw_date_from.to_s, raw_date_to.to_s]
+    else
+      [date_range, "", ""]
+    end
   end
 
   # Return whether the submission time is within the specified date range.

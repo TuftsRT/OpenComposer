@@ -4,6 +4,7 @@ var ocHistory = ocHistory || {};
 ocHistory.applyFilter = function() {
   const filterInput = document.getElementById('_filterInput');
   const filterColumnInput = document.getElementById('_historyFilterColumn');
+  const dateRangeInput = document.getElementById('_historyDateRange');
   const filterModeInput = document.querySelector('input[name="filter_mode"]:checked');
   const dateFromInput = document.getElementById('_historyDateFrom');
   const dateToInput = document.getElementById('_historyDateTo');
@@ -24,6 +25,7 @@ ocHistory.applyFilter = function() {
   urlParams.set('filter', filterText);
   urlParams.delete('statuses');
   urlParams.delete('filter_column');
+  urlParams.delete('date_range');
   urlParams.delete('filter_mode');
   urlParams.delete('date_from');
   urlParams.delete('date_to');
@@ -41,15 +43,19 @@ ocHistory.applyFilter = function() {
     urlParams.set('filter_column', filterColumnInput.value);
   }
 
+  if (dateRangeInput && dateRangeInput.value && dateRangeInput.value !== 'all') {
+    urlParams.set('date_range', dateRangeInput.value);
+  }
+
   if (filterModeInput && filterModeInput.value && filterModeInput.value !== 'and') {
     urlParams.set('filter_mode', filterModeInput.value);
   }
 
-  if (dateFromInput && dateFromInput.value) {
+  if (dateRangeInput && dateRangeInput.value === 'custom' && dateFromInput && dateFromInput.value) {
     urlParams.set('date_from', dateFromInput.value);
   }
 
-  if (dateToInput && dateToInput.value) {
+  if (dateRangeInput && dateRangeInput.value === 'custom' && dateToInput && dateToInput.value) {
     urlParams.set('date_to', dateToInput.value);
   }
 
@@ -58,6 +64,29 @@ ocHistory.applyFilter = function() {
   }
 
   window.location.href = `${window.location.pathname}?${urlParams.toString()}`;
+};
+
+ocHistory.updateDateRangeVisibility = function() {
+  const dateRangeInput = document.getElementById('_historyDateRange');
+  const customDates = document.getElementById('_historyCustomDates');
+  if (!dateRangeInput || !customDates) return;
+
+  customDates.classList.toggle('d-none', dateRangeInput.value !== 'custom');
+  ocHistory.syncSearchLabelWidth();
+};
+
+ocHistory.syncSearchLabelWidth = function() {
+  const labels = Array.from(document.querySelectorAll('.history-search-label'));
+  if (labels.length === 0) return;
+
+  labels.forEach(label => {
+    label.style.width = 'auto';
+  });
+
+  const maxWidth = Math.ceil(Math.max(...labels.map(label => label.offsetWidth)));
+  labels.forEach(label => {
+    label.style.width = `${maxWidth}px`;
+  });
 };
 
 // Toggle the detailed search area.
@@ -73,6 +102,7 @@ ocHistory.toggleAdvancedSearch = function() {
   button.classList.toggle('active', isHidden);
   icon.classList.toggle('bi-chevron-down', !isHidden);
   icon.classList.toggle('bi-chevron-up', isHidden);
+  window.requestAnimationFrame(() => ocHistory.syncSearchLabelWidth());
 };
 
 ocHistory.advancedToggle = document.getElementById('_historyAdvancedToggle');
@@ -81,6 +111,16 @@ if (ocHistory.advancedToggle) {
     ocHistory.toggleAdvancedSearch();
   });
 }
+
+ocHistory.dateRangeInput = document.getElementById('_historyDateRange');
+if (ocHistory.dateRangeInput) {
+  ocHistory.updateDateRangeVisibility();
+  ocHistory.dateRangeInput.addEventListener('change', function() {
+    ocHistory.updateDateRangeVisibility();
+  });
+}
+
+ocHistory.syncSearchLabelWidth();
 
 // Update the status of a batch operation (e.g., CancelJob, DeleteInfo) for selected jobs.
 ocHistory.updateStatusBatch = function(action, jobIds) {
