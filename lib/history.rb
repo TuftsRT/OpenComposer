@@ -248,23 +248,23 @@ helpers do
 
     query_params = []
     serialized_statuses = serialize_history_statuses(values["statuses"])
-    query_params << "statuses=#{serialized_statuses}" if serialized_statuses
-    query_params << "filter=#{values["filter"]}" if values["filter"] && !values["filter"].empty?
-    query_params << "filter_column=#{values["filter_column"]}" if values["filter_column"] && values["filter_column"] != "all"
-    query_params << "sort=#{values["sort"]}" if values["sort"] && !values["sort"].empty?
-    query_params << "order=#{values["order"]}" if values["order"] && !values["order"].empty?
-    query_params << "date_range=#{values["date_range"]}" if values["date_range"] && values["date_range"] != "all"
-    query_params << "filter_mode=#{values["filter_mode"]}" if values["filter_mode"] && values["filter_mode"] != "and"
+    query_params << ["statuses", serialized_statuses] if serialized_statuses
+    query_params << ["filter", values["filter"]] if values["filter"] && !values["filter"].empty?
+    query_params << ["filter_column", values["filter_column"]] if values["filter_column"] && values["filter_column"] != "all"
+    query_params << ["sort", values["sort"]] if values["sort"] && !values["sort"].empty?
+    query_params << ["order", values["order"]] if values["order"] && !values["order"].empty?
+    query_params << ["date_range", values["date_range"]] if values["date_range"] && values["date_range"] != "all"
+    query_params << ["filter_mode", values["filter_mode"]] if values["filter_mode"] && values["filter_mode"] != "and"
     if values["date_range"] == "custom"
-      query_params << "date_from=#{values["date_from"]}" if values["date_from"] && !values["date_from"].empty?
-      query_params << "date_to=#{values["date_to"]}" if values["date_to"] && !values["date_to"].empty?
+      query_params << ["date_from", values["date_from"]] if values["date_from"] && !values["date_from"].empty?
+      query_params << ["date_to", values["date_to"]] if values["date_to"] && !values["date_to"].empty?
     end
-    query_params << "detail_open=true" if values["detail_open"] == "true"
-    query_params << "rows=#{values["rows"]}" if values["rows"] && values["rows"].to_i != HISTORY_ROWS
-    query_params << "p=#{values["p"]}" if values["p"] && values["p"].to_i != 1
-    query_params << "cluster=#{values["cluster"]}" if values["cluster"]
+    query_params << ["detail_open", "true"] if values["detail_open"] == "true"
+    query_params << ["rows", values["rows"]] if values["rows"] && values["rows"].to_i != HISTORY_ROWS
+    query_params << ["p", values["p"]] if values["p"] && values["p"].to_i != 1
+    query_params << ["cluster", values["cluster"]] if values["cluster"]
 
-    query_params.empty? ? "./history" : "./history?#{query_params.join('&')}"
+    query_params.empty? ? "./history" : "./history?#{URI.encode_www_form(query_params)}"
   end
 
   # Split the filter text into search terms.

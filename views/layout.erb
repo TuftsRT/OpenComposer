@@ -101,6 +101,54 @@
      .nav-link:hover {
        color: white !important;
      }
+      <% if @dir_name == "history" %>
+      #_historyTbody td {
+        vertical-align: middle;
+      }
+
+      .history-sort-controls {
+        display: inline-flex;
+        flex-direction: column;
+        gap: 0;
+        margin-left: 0.15rem;
+        vertical-align: middle;
+      }
+
+      .history-sort-link {
+        color: rgba(70, 48, 32, 0.82);
+        display: block;
+        font-size: 0.62rem;
+        font-weight: 700;
+        height: 0.56rem;
+        line-height: 0.56rem;
+        min-width: 0.7rem;
+        padding: 0;
+        text-align: center;
+        text-decoration: none;
+      }
+
+      .history-sort-icon {
+        display: inline-block;
+        transform: scaleX(1.55);
+        transform-origin: center;
+      }
+
+      .history-sort-link:hover {
+        color: #b85400;
+      }
+
+      .history-sort-link.history-sort-active {
+        color: #d11f1f;
+      }
+
+      .history-modal-match-cell {
+        box-shadow: inset 0 0 0 2px transparent;
+      }
+
+      .history-modal-match-cell.history-modal-match-active {
+        box-shadow: inset 0 0 0 2px var(--bs-warning);
+      }
+      <% end %>
      </style>
   </head>
 
