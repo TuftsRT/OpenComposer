@@ -566,10 +566,10 @@ helpers do
   def history_filter_column_items(conf)
     items = [
       ["all", "(ALL)"],
-      [JOB_ID, "Job ID"],
+      [JOB_ID, "Job ID / Job Details"],
       [JOB_APP_NAME, "Application"],
       [HEADER_SCRIPT_LOCATION, "Script Location"],
-      [HEADER_SCRIPT_NAME, "Script Name"]
+      [HEADER_SCRIPT_NAME, "Script Name / Job Script"]
     ]
 
     history_config_items(conf).each do |key, label|
