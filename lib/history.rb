@@ -303,6 +303,28 @@ helpers do
     true
   end
 
+  # Return a natural sort key for scheduler-specific job IDs.
+  # Supported formats:
+  # - "12345"       : single job
+  # - "12345_6"     : array/sub job with "_" separator (e.g. Slurm, Fujitsu TCS)
+  # - "12345.6"     : array/sub job with "." separator (e.g. Grid Engine)
+  # - "12345[6]"    : array/sub job with "[]" suffix (e.g. PBS/PBS Pro)
+  # Unsupported formats fall back to string comparison after numeric IDs.
+  def history_job_id_sort_key(job_id)
+    value = job_id.to_s
+
+    case value
+    when /\A(\d+)\z/
+      [$1.to_i, -1, value]
+    when /\A(\d+)[_.](\d+)\z/
+      [$1.to_i, $2.to_i, value]
+    when /\A(\d+)\[(\d+)\]\z/
+      [$1.to_i, $2.to_i, value]
+    else
+      [Float::INFINITY, Float::INFINITY, value]
+    end
+  end
+
   # Return whether the filter terms match according to the selected mode.
   def history_filter_mode_matches?(search_text, filter_text, filter_mode)
     terms = history_filter_terms(filter_text)
@@ -840,6 +862,12 @@ helpers do
       info = { JOB_ID => row["job_id"] }.merge(job_record_to_legacy_hash(row))
       jobs << info
     end
+
+    jobs.sort_by! do |job|
+      submission_time = normalize_time_for_db(job[JOB_SUBMISSION_TIME]) || ""
+      job_id_main, job_id_sub, job_id_text = history_job_id_sort_key(job[JOB_ID])
+      [submission_time, job_id_main, job_id_sub, job_id_text]
+    end.reverse!
 
     return jobs
   end
