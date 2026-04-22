@@ -10,8 +10,8 @@ ocHistory.applyFilter = function() {
   const dateToInput = document.getElementById('_historyDateTo');
   const detailButton = document.getElementById('_historyAdvancedToggle');
   const statusInputs = [
-    document.getElementById('_historyStatusRunning'),
     document.getElementById('_historyStatusQueued'),
+    document.getElementById('_historyStatusRunning'),
     document.getElementById('_historyStatusCompleted'),
     document.getElementById('_historyStatusFailed')
   ].filter(Boolean);

@@ -96,12 +96,12 @@
         </form>
         <div class="d-flex">
           <div class="form-check form-check-inline">
-            <input class="form-check-input" type="checkbox" name="_historyStatusRunning" id="_historyStatusRunning" value="running" <%= 'checked' if @statuses&.include?('running') %>>
-            <label class="form-check-label" for="_historyStatusRunning">Running</label>
-          </div>
-          <div class="form-check form-check-inline">
             <input class="form-check-input" type="checkbox" name="_historyStatusQueued" id="_historyStatusQueued" value="queued" <%= 'checked' if @statuses&.include?('queued') %>>
             <label class="form-check-label" for="_historyStatusQueued">Queued</label>
+          </div>
+          <div class="form-check form-check-inline">
+            <input class="form-check-input" type="checkbox" name="_historyStatusRunning" id="_historyStatusRunning" value="running" <%= 'checked' if @statuses&.include?('running') %>>
+            <label class="form-check-label" for="_historyStatusRunning">Running</label>
           </div>
           <div class="form-check form-check-inline">
             <input class="form-check-input" type="checkbox" name="_historyStatusCompleted" id="_historyStatusCompleted" value="completed" <%= 'checked' if @statuses&.include?('completed') %>>
