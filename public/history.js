@@ -122,6 +122,12 @@ if (ocHistory.dateRangeInput) {
 
 ocHistory.syncSearchLabelWidth();
 
+document.querySelectorAll('input[id^="_historyStatus"]').forEach(input => {
+  input.addEventListener('change', function() {
+    ocHistory.applyFilter();
+  });
+});
+
 // Update the status of a batch operation (e.g., CancelJob, DeleteInfo) for selected jobs.
 ocHistory.updateStatusBatch = function(action, jobIds) {
   if (!Array.isArray(jobIds)) return;
