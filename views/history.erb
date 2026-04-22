@@ -52,18 +52,6 @@
   .history-modal-match-cell.history-modal-match-active {
     box-shadow: inset 0 0 0 2px var(--bs-warning);
   }
-
-  .history-status-row {
-    display: flex;
-    gap: 0.75rem;
-    width: 100%;
-  }
-
-  .history-status-item {
-    flex: 1 1 0;
-    margin-right: 0;
-    white-space: nowrap;
-  }
 </style>
 
 <%= output_action_modal("CancelJob") %>
@@ -155,24 +143,23 @@
             </div>
           </div>
         </form>
-        <div class="history-status-row">
-          <div class="form-check form-check-inline history-status-item">
+        <div class="d-flex">
+          <div class="form-check form-check-inline">
             <input class="form-check-input" type="checkbox" name="_historyStatusQueued" id="_historyStatusQueued" value="queued" <%= 'checked' if @statuses&.include?('queued') %>>
             <label class="form-check-label" for="_historyStatusQueued">Queued</label>
           </div>
-          <div class="form-check form-check-inline history-status-item">
+          <div class="form-check form-check-inline">
             <input class="form-check-input" type="checkbox" name="_historyStatusRunning" id="_historyStatusRunning" value="running" <%= 'checked' if @statuses&.include?('running') %>>
             <label class="form-check-label" for="_historyStatusRunning">Running</label>
           </div>
-          <div class="form-check form-check-inline history-status-item">
+          <div class="form-check form-check-inline">
             <input class="form-check-input" type="checkbox" name="_historyStatusCompleted" id="_historyStatusCompleted" value="completed" <%= 'checked' if @statuses&.include?('completed') %>>
             <label class="form-check-label" for="_historyStatusCompleted">Completed</label>
           </div>
-          <div class="form-check form-check-inline history-status-item">
+          <div class="form-check form-check-inline me-1">
             <input class="form-check-input" type="checkbox" name="_historyStatusFailed" id="_historyStatusFailed" value="failed" <%= 'checked' if @statuses&.include?('failed') %>>
             <label class="form-check-label" for="_historyStatusFailed">Failed</label>
           </div>
-        </div>
         </div>
         <% if @conf.key?("clusters") && @conf["clusters"].size > 1 %>
           <div class="d-flex mt-1">
@@ -185,6 +172,7 @@
             <% end %>
           </div>
         <% end %>
+        </div>
       </div>
     </div>
   </div>
