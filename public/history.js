@@ -213,8 +213,15 @@ ocHistory.redirectWithRows = function() {
 document.querySelectorAll('input[name="_historyCluster"]').forEach(radio => {
   radio.addEventListener('change', () => {
     const url = new URL(window.location.href);
+    const detailButton = document.getElementById('_historyAdvancedToggle');
     url.searchParams.set('cluster', radio.value);
     url.searchParams.delete('p');
+    url.searchParams.delete('detail_open');
+
+    if (detailButton && detailButton.getAttribute('aria-expanded') === 'true') {
+      url.searchParams.set('detail_open', 'true');
+    }
+
     window.location.href = url.toString();
   });
 });
