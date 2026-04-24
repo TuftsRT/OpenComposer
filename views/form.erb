@@ -152,16 +152,19 @@ ocForm.updateSubmitContents = function(selectedValues) {
   <%= @js["submit"].chomp %>
 };
 
-// Sync a textarea content to the corresponding highlight area.
-ocForm.decorateSchedulerDirectives = function(highlight) {
-  if (!highlight) return;
-
+// Rewrap scheduler directive lines after highlight.js tokenization.
+ocForm.decorateSchedulerDirectives = function(area, highlight) {
+  if (!area || !highlight) return;
   const directivePattern = /^(?:#(?:PJM|SBATCH|PBS)\b|#\$)/;
-  highlight.querySelectorAll('.hljs-comment').forEach((node) => {
-    if (directivePattern.test(node.textContent.trimStart())) {
-      node.classList.add('oc-scheduler-directive');
-    }
-  });
+  const sourceLines = area.value.split('\n');
+  const highlightedLines = highlight.innerHTML.split('\n');
+
+  highlight.innerHTML = highlightedLines.map((lineHtml, index) => {
+    const sourceLine = sourceLines[index] || '';
+    if (!directivePattern.test(sourceLine.trimStart())) return lineHtml;
+
+    return `<span class="oc-scheduler-directive">${lineHtml}</span>`;
+  }).join('\n');
 };
 
 // Sync the caret color to the base text color of the highlighted code.
@@ -181,7 +184,7 @@ ocForm.syncHighlight = function(area, highlight) {
   highlight.textContent = area.value;
   highlight.removeAttribute('data-highlighted');
   hljs.highlightElement(highlight);
-  ocForm.decorateSchedulerDirectives(highlight);
+  ocForm.decorateSchedulerDirectives(area, highlight);
   ocForm.syncCaretColor(area, highlight);
 };
 
