@@ -228,7 +228,7 @@
 <% if @jobs_size > 0 %>
 <div class="row mt-2 mx-1">
   <div class="col text-start">
-    <div>Showing <%= @start_index + 1 %> to <%= @end_index + 1 %> of <%= @jobs_size %> entries</div>
+    <div>Showing <%= @start_index + 1 %> to <%= @end_index + 1 %> of <%= @jobs_size %> entries (<%= @history_search_elapsed_label %> sec.)</div>
     <div>Show
       <input type="number" id="_historyRows" value=<%= @rows %> style="width: 80px;" onkeydown="if(event.key === 'Enter') ocHistory.redirectWithRows()" >
       entries

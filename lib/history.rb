@@ -463,13 +463,7 @@ helpers do
         submission_time TEXT,
         updated_time TEXT,
         status TEXT,
-        payload_json TEXT NOT NULL DEFAULT '{}',
-        search_text TEXT NOT NULL DEFAULT ''
-      );
-
-      CREATE TABLE IF NOT EXISTS metadata (
-        key TEXT PRIMARY KEY,
-        value TEXT NOT NULL
+        payload_json TEXT NOT NULL DEFAULT '{}'
       );
 
       CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
@@ -496,8 +490,7 @@ helpers do
       record["submission_time"],
       record["updated_time"],
       record["status"],
-      record["payload_json"],
-      record["search_text"]
+      record["payload_json"]
     ]
 
     db.execute(<<~SQL, params)
@@ -512,10 +505,9 @@ helpers do
         submission_time,
         updated_time,
         status,
-        payload_json,
-        search_text
+        payload_json
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(job_id) DO UPDATE SET
         app_name = excluded.app_name,
         app_dir_name = excluded.app_dir_name,
@@ -526,8 +518,7 @@ helpers do
         submission_time = excluded.submission_time,
         updated_time = excluded.updated_time,
         status = excluded.status,
-        payload_json = excluded.payload_json,
-        search_text = excluded.search_text
+        payload_json = excluded.payload_json
     SQL
   end
 
@@ -548,22 +539,6 @@ helpers do
       FROM jobs
       WHERE status IS NULL OR (status != ? AND status != ?)
       ORDER BY submission_time DESC, job_id DESC
-    SQL
-  end
-
-  # Return one metadata value.
-  def get_metadata(db, key)
-    row = db.get_first_row("SELECT value FROM metadata WHERE key = ?", [key])
-    row && row["value"]
-  end
-
-  # Insert or update one metadata value.
-  def set_metadata(db, key, value)
-    db.execute(<<~SQL, [key, value])
-      INSERT INTO metadata (key, value)
-      VALUES (?, ?)
-      ON CONFLICT(key) DO UPDATE SET
-        value = excluded.value
     SQL
   end
 
@@ -617,23 +592,9 @@ helpers do
     end
   end
 
-  # Return dedicated columns that should be included in search_text.
-  def search_text_column_keys
+  # Return dedicated columns that should be included in all-column search text.
+  def search_column_keys
     job_record_column_keys - %w[status]
-  end
-
-  # Build a stable signature for history search configuration.
-  def build_history_signature(history_conf)
-    search_version = "history-search-v5"
-    keys = Array(history_conf).map do |item|
-      if item.is_a?(Hash)
-        item.keys
-      else
-        item
-      end
-    end.flatten.compact.map(&:to_s).sort
-
-    Digest::SHA256.hexdigest(([search_version] + keys).join("\n"))
   end
 
   # Return configured history fields as [key, label] pairs.
@@ -700,7 +661,7 @@ helpers do
 
   # Return search text for the selected History table column.
   def history_filter_target_text(row, filter_column)
-    return row["search_text"] if filter_column == "all"
+    return build_search_text_from_row(row) if filter_column == "all"
 
     job = { JOB_ID => row["job_id"] }.merge(job_record_to_legacy_hash(row))
     if filter_column == JOB_ID
@@ -725,10 +686,10 @@ helpers do
     nil
   end
 
-  # Build search text from all stored job values, including payload_json content.
+  # Build all-column search text from stored job values and payload_json content.
   def build_search_text(record, payload_hash)
     payload_hash ||= {}
-    values = search_text_column_keys.flat_map do |key|
+    values = search_column_keys.flat_map do |key|
       history_search_values(record[key] || record[key.to_sym])
     end
     values.concat(history_search_values(payload_hash))
@@ -742,8 +703,16 @@ helpers do
       .downcase
   end
 
+  # Build all-column search text directly from one DB row.
+  # This keeps the search-text construction logic reusable even after the
+  # persisted jobs.search_text cache is removed.
+  def build_search_text_from_row(row)
+    payload_hash = JSON.parse(row["payload_json"] || "{}")
+    build_search_text(row, payload_hash)
+  end
+
   # Build a SQLite job record from existing, submit, and scheduler data.
-  def build_job_record(existing:, submit_data:, scheduler_data:, conf:)
+  def build_job_record(existing:, submit_data:, scheduler_data:)
     merged = merge_job_data({}, existing)
     merged = merge_job_data(merged, submit_data)
     merged = merge_job_data(merged, scheduler_data)
@@ -763,7 +732,6 @@ helpers do
 
     payload_hash = build_payload_hash(merged)
     record["payload_json"] = JSON.generate(payload_hash)
-    record["search_text"] = build_search_text(record, payload_hash)
     record
   end
 
@@ -795,10 +763,9 @@ helpers do
           data = store[job_id]
           next unless data
 
-          upsert_job(db, convert_pstore_record_to_sqlite(job_id.to_s, data, conf))
+          upsert_job(db, convert_pstore_record_to_sqlite(job_id.to_s, data))
         end
       end
-      set_metadata(db, "history_signature", build_history_signature(conf["history"]))
       db.commit
     rescue StandardError
       db.rollback
@@ -811,7 +778,7 @@ helpers do
   end
 
   # Convert a legacy PStore record into a SQLite job record.
-  def convert_pstore_record_to_sqlite(job_id, data, conf)
+  def convert_pstore_record_to_sqlite(job_id, data)
     legacy = (data || {}).transform_keys(&:to_s)
 
     submission_time = normalize_time_for_db(legacy[JOB_SUBMISSION_TIME.to_s])
@@ -828,7 +795,7 @@ helpers do
       "status" => legacy[JOB_STATUS_ID.to_s]
     )
 
-    build_job_record(existing: nil, submit_data: merged, scheduler_data: nil, conf: conf)
+    build_job_record(existing: nil, submit_data: merged, scheduler_data: nil)
   end
 
   # Parse payload_json and merge it back with dedicated columns using legacy key names.
@@ -867,26 +834,6 @@ helpers do
     )
   end
 
-  # Ensure search_text matches the current history configuration.
-  def ensure_search_text_up_to_date(db, conf)
-    current_signature = build_history_signature(conf["history"])
-    return if get_metadata(db, "history_signature") == current_signature
-
-    db.transaction
-    begin
-      each_job(db) do |job|
-        payload_hash = JSON.parse(job["payload_json"] || "{}")
-        search_text = build_search_text(job, payload_hash)
-        db.execute("UPDATE jobs SET search_text = ? WHERE job_id = ?", [search_text, job["job_id"]])
-      end
-      set_metadata(db, "history_signature", current_signature)
-      db.commit
-    rescue StandardError
-      db.rollback
-      raise
-    end
-  end
-
   # Update the status of all jobs that are not completed
   def update_status(conf, scheduler, bin, bin_overrides, ssh_wrapper, cluster_name)
     db = open_history_db(conf, cluster_name)
@@ -922,8 +869,7 @@ helpers do
           build_job_record(
             existing: existing,
             submit_data: nil,
-            scheduler_data: scheduler_data,
-            conf: conf
+            scheduler_data: scheduler_data
           )
         )
       end
@@ -936,7 +882,6 @@ helpers do
   def get_all_jobs(conf, cluster_name, statuses, filter, filter_column, date_from, date_to, filter_mode, sort = "", order = "")
     jobs = []
     db = open_history_db(conf, cluster_name)
-    ensure_search_text_up_to_date(db, conf)
 
     selected_statuses = Array(statuses).map(&:to_s)
     filter_text = CGI.unescapeHTML(filter.to_s).downcase

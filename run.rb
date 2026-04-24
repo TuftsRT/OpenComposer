@@ -4,7 +4,6 @@ require "yaml"
 require "erb"
 require "sqlite3"
 require "json"
-require "digest"
 require "pstore"
 require "time"
 require "fileutils"
@@ -340,7 +339,9 @@ def show_website(job_id = nil, error_msg = nil, error_params = nil, script_path 
     @date_to      = escape_html(raw_date_to)
     @filter_mode  = escape_html(params["filter_mode"] || "and")
     @detail_open  = escape_html(params["detail_open"] || "false")
+    history_search_started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     all_jobs      = get_all_jobs(@conf, @cluster_name, @statuses, @filter, @filter_column, @date_from, @date_to, @filter_mode, @sort, @order)
+    @history_search_elapsed_seconds = Process.clock_gettime(Process::CLOCK_MONOTONIC) - history_search_started_at
     @jobs_size    = all_jobs.size
     @rows         = [[(params["rows"] || HISTORY_ROWS).to_i, 1].max, @jobs_size].min
     @page_size    = (@rows == 0) ? 1 : ((@jobs_size - 1) / @rows) + 1
@@ -353,6 +354,7 @@ def show_website(job_id = nil, error_msg = nil, error_params = nil, script_path 
     @history_hash = history_config_items(@conf).to_h
     @filter_column_items = history_filter_column_items(@conf)
     @date_range_items = history_date_range_items
+    @history_search_elapsed_label = format("%.3f", @history_search_elapsed_seconds || 0.0)
 
     return erb :history
   else # application form
@@ -728,12 +730,10 @@ post "/*" do
         record = build_job_record(
           existing: nil,
           submit_data: submit_data.merge("job_id" => id.to_s),
-          scheduler_data: nil,
-          conf: conf
+          scheduler_data: nil
         )
         upsert_job(db, record)
       end
-      set_metadata(db, "history_signature", build_history_signature(conf["history"]))
     end
 
     # Output log
