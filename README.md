@@ -8,7 +8,7 @@ interface for creating, previewing, editing, and submitting batch job scripts. I
 supports multiple job schedulers and can be configured for different HPC applications.
 
 - **App type:** Workflow Composer (Jobs category)
-- **Latest release:** [`v1.9.0`](https://github.com/RIKEN-RCCS/OpenComposer/releases/tag/v1.9.0) (see [Changelog](https://github.com/RIKEN-RCCS/OpenComposer/blob/main/CHANGELOG.md))
+- **Latest release:** [`v2.0.0`](https://github.com/RIKEN-RCCS/OpenComposer/releases/tag/v2.0.0) (see [Changelog](https://github.com/RIKEN-RCCS/OpenComposer/blob/main/CHANGELOG.md))
 - **License:** MIT (see [LICENSE file](https://github.com/RIKEN-RCCS/OpenComposer/blob/main/LICENSE))
 - **Requirements:** Open OnDemand 3.0 or later.
 - **Supported job schedulers:** Slurm, PBS Pro, Grid Engine, Fujitsu TCS
@@ -35,9 +35,6 @@ supports multiple job schedulers and can be configured for different HPC applica
 ### History page
   <img width="600" style="border: 1px solid #333;" alt="History" src="https://riken-rccs.github.io/OpenComposer/docs/img/history_page.png">
 
-## Demo
-https://github.com/user-attachments/assets/0eee0b62-9364-465a-ae1e-7d412c1c9de9
-
 ## Documents
 
 You can access the full documentation below:
@@ -62,6 +59,9 @@ You can access the full documentation below:
 
 ### Quick start
 
+The following steps assume you have administrator privileges.
+If you do not have administrator privileges, see [Section 4. "Installation by general user" in installation document](https://riken-rccs.github.io/OpenComposer/docs/install.html#general).
+
 ```sh
 $ cd /var/www/ood/apps/sys/
 $ sudo git clone https://github.com/RIKEN-RCCS/OpenComposer.git
@@ -69,8 +69,7 @@ $ cd OpenComposer
 $ sudo cp conf.yml.erb.sample conf.yml.erb
 ```
 
-Open Composer uses `conf.yml.erb` for cluster and scheduler configuration and
-per-application `form.yml` files to define job submission forms.
+You need to edit `conf.yml.erb`. For details, see [Section 2. "Setting" in installation manual](https://riken-rccs.github.io/OpenComposer/docs/install.html#setting).
 
 ## Testing
 
