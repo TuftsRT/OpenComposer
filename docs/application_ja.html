@@ -133,7 +133,7 @@ script: |
     step:   [  1,  1 ]
 
 script: |
-  #SBATCH --time=#{time_1}:#{time_2}:00</pre>
+  #SBATCH -t #{time_1}:#{time_2}:00</pre>
       <img width="800" src="img/label1.png" alt="label">
       <p>
   <code>label</code>が配列形式ではない場合、一行の長いラベルを記述することができます。<code>help</code>も同様です。
@@ -409,7 +409,7 @@ script: |
 
 script: |
   #SBATCH --time=#{time_1}:#{zeropadding(time_2, 2)}:00</pre>
-    <img src="img/zeropadding.png" alt="Zero Padding">
+    <img width="800" src="img/zeropadding.png" alt="Zero Padding">
 
     <p>
       関数<code>calc(expr[, decimalPlaces, roundingMode])</code>は、式<code>expr</code>を計算して結果を返します。第2引数<code>decimalPlaces</code>には、小数点以下の桁数を指定します。省略した場合は0になります。第3引数<code>roundingMode</code>には、丸め方式を指定します。<code>OC_ROUNDING_ROUND</code>（四捨五入）、<code>OC_ROUNDING_FLOOR</code>（切り捨て）、<code>OC_ROUNDING_CEIL</code>（切り上げ）のいずれかを指定できます。省略した場合は<code>OC_ROUNDING_ROUND</code>になります。
