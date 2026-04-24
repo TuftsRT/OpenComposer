@@ -570,10 +570,34 @@ helpers do
     ]
   end
 
+  # Return legacy/external keys whose values duplicate dedicated DB columns.
+  # These keys are candidates for removal from payload_json because the values
+  # can be reconstructed from the dedicated columns.
+  def payload_duplicate_legacy_keys
+    [
+      JOB_APP_NAME,
+      JOB_DIR_NAME,
+      HEADER_SCRIPT_LOCATION,
+      HEADER_SCRIPT_NAME,
+      HEADER_JOB_NAME,
+      JOB_NAME,
+      JOB_PARTITION,
+      JOB_SUBMISSION_TIME,
+      JOB_STATUS_ID
+    ]
+  end
+
+  # Return all keys that should be excluded from payload_json because they are
+  # stored in dedicated DB columns or can be reconstructed from those columns.
+  def payload_excluded_keys
+    (job_record_column_keys + payload_duplicate_legacy_keys).map(&:to_s).uniq
+  end
+
   # Build payload data by excluding dedicated column keys.
   def build_payload_hash(record_hash)
+    excluded_keys = payload_excluded_keys
     (record_hash || {}).each_with_object({}) do |(key, value), payload|
-      next if job_record_column_keys.include?(key.to_s)
+      next if excluded_keys.include?(key.to_s)
       payload[key.to_s] = value
     end
   end
@@ -808,8 +832,10 @@ helpers do
       JOB_DIR_NAME => record["app_dir_name"],
       HEADER_SCRIPT_LOCATION => record["script_location"],
       HEADER_SCRIPT_NAME => record["script_name"],
+      # Keep this legacy fallback because some jobs may not have a resolved
+      # scheduler-side job name yet when the record is first created.
       JOB_NAME => record["job_name"].to_s.empty? ? payload_hash[HEADER_JOB_NAME] : record["job_name"],
-      JOB_PARTITION => record["partition"].to_s.empty? ? payload_hash["partition"] : record["partition"],
+      JOB_PARTITION => record["partition"],
       JOB_SUBMISSION_TIME => record["submission_time"],
       JOB_STATUS_ID => record["status"]
     )
