@@ -5,6 +5,7 @@
 - Add side-by-side syntax highlighting overlays for the script and submit textareas.
 - Add configurable `highlight_theme` and `directive_color` settings for history/script highlighting.
 - Add advanced history search options for date range, AND/OR matching, and field selection.
+- Add history search elapsed-time output next to the entry count.
 
 ### Changed
 - Change history storage from PStore to SQLite with automatic migration from legacy `.db` files.
