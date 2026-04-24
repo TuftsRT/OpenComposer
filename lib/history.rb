@@ -625,13 +625,25 @@ helpers do
   def history_config_items(conf)
     history_items = conf["history"] || HISTORY_KEY_MAP.keys
 
-    Array(history_items).each_with_object([]) do |item, items|
+    entries =
+      if history_items.is_a?(Hash)
+        history_items.to_a
+      else
+        Array(history_items)
+      end
+
+    entries.each_with_object([]) do |item, items|
       if item.is_a?(Hash)
         item.each do |key, opt|
           normalized_key = key.to_s
-          label = opt && opt["label"] || HISTORY_KEY_MAP.fetch(normalized_key, normalized_key)
+          label = (opt.is_a?(Hash) && (opt["label"] || opt[:label])) || HISTORY_KEY_MAP.fetch(normalized_key, normalized_key)
           items << [normalized_key, label]
         end
+      elsif item.is_a?(Array) && item.size == 2
+        key, opt = item
+        normalized_key = key.to_s
+        label = (opt.is_a?(Hash) && (opt["label"] || opt[:label])) || HISTORY_KEY_MAP.fetch(normalized_key, normalized_key)
+        items << [normalized_key, label]
       else
         normalized_key = item.to_s
         items << [normalized_key, HISTORY_KEY_MAP.fetch(normalized_key, normalized_key)]
