@@ -339,16 +339,16 @@ def show_website(job_id = nil, error_msg = nil, error_params = nil, script_path 
     @date_to      = escape_html(raw_date_to)
     @filter_mode  = escape_html(params["filter_mode"] || "and")
     @detail_open  = escape_html(params["detail_open"] || "false")
-    history_search_started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-    all_jobs      = get_all_jobs(@conf, @cluster_name, @statuses, @filter, @filter_column, @date_from, @date_to, @filter_mode, @sort, @order)
-    @history_search_elapsed_seconds = Process.clock_gettime(Process::CLOCK_MONOTONIC) - history_search_started_at
-    @jobs_size    = all_jobs.size
-    @rows         = [[(params["rows"] || HISTORY_ROWS).to_i, 1].max, @jobs_size].min
-    @page_size    = (@rows == 0) ? 1 : ((@jobs_size - 1) / @rows) + 1
+    requested_rows = [(params["rows"] || HISTORY_ROWS).to_i, 1].max
     @current_page = (params["p"] || 1).to_i
+    offset = (@current_page - 1) * requested_rows
+    history_search_started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    @jobs, @jobs_size = get_jobs_page(@conf, @cluster_name, @statuses, @filter, @filter_column, @date_from, @date_to, @filter_mode, @sort, @order, requested_rows, offset)
+    @history_search_elapsed_seconds = Process.clock_gettime(Process::CLOCK_MONOTONIC) - history_search_started_at
+    @rows         = [requested_rows, @jobs_size].min
+    @page_size    = (@rows == 0) ? 1 : ((@jobs_size - 1) / @rows) + 1
     @start_index  = @jobs_size == 0 ? 0 : (@current_page - 1) * @rows
     @end_index    = @jobs_size == 0 ? 0 : [@current_page * @rows, @jobs_size].min - 1
-    @jobs         = @start_index >= @jobs_size ? [] : all_jobs[@start_index..@end_index]
     @error_msg    = error_msg
 
     @history_hash = history_config_items(@conf).to_h

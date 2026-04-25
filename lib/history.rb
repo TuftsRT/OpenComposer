@@ -395,6 +395,108 @@ helpers do
     end
   end
 
+  # Return whether the request can use the SQL fast path.
+  # For now, only the no-search case is optimized. Search-specific filtering
+  # still falls back to the existing Ruby path.
+  def history_use_sql_fast_path?(filter)
+    history_filter_terms(filter).empty?
+  end
+
+  # Build SQL WHERE clauses and bind params for filters that map cleanly to DB columns.
+  def history_sql_where(statuses, date_from, date_to)
+    clauses = []
+    params = []
+
+    selected_statuses = Array(statuses).map(&:to_s).filter_map { |status| JOB_STATUS[status] }
+    if selected_statuses.empty?
+      clauses << "1 = 0"
+    else
+      placeholders = (["?"] * selected_statuses.length).join(", ")
+      clauses << "status IN (#{placeholders})"
+      params.concat(selected_statuses)
+    end
+
+    unless date_from.to_s.empty?
+      clauses << "submission_time >= ?"
+      params << Time.parse(date_from.to_s).iso8601
+    end
+
+    unless date_to.to_s.empty?
+      clauses << "submission_time < ?"
+      params << (Time.parse(date_to.to_s) + 86400).iso8601
+    end
+
+    [clauses, params]
+  rescue ArgumentError
+    [clauses, params]
+  end
+
+  # Return SQL ORDER BY for columns that can be sorted directly in SQLite.
+  def history_sql_order(sort, order)
+    direction = order == "asc" ? "ASC" : "DESC"
+
+    case sort
+    when JOB_ID
+      # Approximate the existing natural job-id order inside SQLite.
+      <<~SQL.gsub(/\s+/, " ").strip
+        CAST(job_id AS INTEGER) #{direction},
+        CASE
+          WHEN instr(job_id, '_') > 0 THEN CAST(substr(job_id, instr(job_id, '_') + 1) AS INTEGER)
+          WHEN instr(job_id, '.') > 0 THEN CAST(substr(job_id, instr(job_id, '.') + 1) AS INTEGER)
+          WHEN instr(job_id, '[') > 0 AND instr(job_id, ']') > instr(job_id, '[')
+            THEN CAST(substr(job_id, instr(job_id, '[') + 1, instr(job_id, ']') - instr(job_id, '[') - 1) AS INTEGER)
+          ELSE -1
+        END #{direction},
+        job_id #{direction}
+      SQL
+    when JOB_APP_NAME
+      "app_name #{direction}, job_id #{direction}"
+    when HEADER_SCRIPT_LOCATION
+      "script_location #{direction}, job_id #{direction}"
+    when HEADER_SCRIPT_NAME
+      "script_name #{direction}, job_id #{direction}"
+    when JOB_NAME
+      "job_name #{direction}, job_id #{direction}"
+    when JOB_PARTITION
+      "partition #{direction}, job_id #{direction}"
+    when JOB_STATUS_ID
+      status_case = <<~SQL.gsub(/\s+/, " ").strip
+        CASE status
+          WHEN '#{JOB_STATUS["queued"]}' THEN 0
+          WHEN '#{JOB_STATUS["running"]}' THEN 1
+          WHEN '#{JOB_STATUS["completed"]}' THEN 2
+          WHEN '#{JOB_STATUS["failed"]}' THEN 3
+          ELSE 99
+        END
+      SQL
+      "#{status_case} #{direction}, job_id #{direction}"
+    when JOB_SUBMISSION_TIME
+      "submission_time #{direction}, job_id #{direction}"
+    else
+      "job_id #{direction}"
+    end
+  end
+
+  # Return the total number of History rows matching SQL-friendly filters.
+  def count_history_jobs(db, statuses, date_from, date_to)
+    where_clauses, where_params = history_sql_where(statuses, date_from, date_to)
+    where_sql = where_clauses.empty? ? "" : "WHERE #{where_clauses.join(' AND ')}"
+
+    db.get_first_value("SELECT COUNT(*) FROM jobs #{where_sql}", where_params).to_i
+  end
+
+  # Return one page of History rows using SQL-friendly filters and sorting.
+  def fetch_history_jobs_page(db, statuses, date_from, date_to, sort, order, limit, offset)
+    where_clauses, where_params = history_sql_where(statuses, date_from, date_to)
+    where_sql = where_clauses.empty? ? "" : "WHERE #{where_clauses.join(' AND ')}"
+    order_sql = history_sql_order(sort, order)
+
+    db.execute(
+      "SELECT * FROM jobs #{where_sql} ORDER BY #{order_sql} LIMIT ? OFFSET ?",
+      where_params + [limit, offset]
+    )
+  end
+
   # Return whether the filter terms match according to the selected mode.
   def history_filter_mode_matches?(search_text, filter_text, filter_mode)
     terms = history_filter_terms(filter_text)
@@ -937,6 +1039,22 @@ helpers do
     jobs.reverse! if order == "desc"
 
     return jobs
+  end
+
+  # Return one page of jobs and the matching row count.
+  def get_jobs_page(conf, cluster_name, statuses, filter, filter_column, date_from, date_to, filter_mode, sort, order, limit, offset)
+    db = open_history_db(conf, cluster_name)
+
+    if history_use_sql_fast_path?(filter)
+      total_count = count_history_jobs(db, statuses, date_from, date_to)
+      rows = total_count.zero? ? [] : fetch_history_jobs_page(db, statuses, date_from, date_to, sort, order, limit, offset)
+      jobs = rows.map { |row| { JOB_ID => row["job_id"] }.merge(job_record_to_legacy_hash(row)) }
+      return [jobs, total_count]
+    end
+
+    all_jobs = get_all_jobs(conf, cluster_name, statuses, filter, filter_column, date_from, date_to, filter_mode, sort, order)
+    jobs = offset >= all_jobs.size ? [] : all_jobs[offset, limit] || []
+    [jobs, all_jobs.size]
   end
 
   # Output a styled status badge for a job based on its current status.
