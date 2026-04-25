@@ -972,11 +972,12 @@ ocForm.setInitValue = function(key, num, widget, attr, value, fromId) {
     }
   }
   else if (attr === "value") {
+    const isInitialLoad = typeof fromId === 'undefined';
     switch(widget){
     case 'number':
     case 'text':
     case 'email':
-      if (id !== fromId) {
+      if (isInitialLoad) {
         document.getElementById(id).value = value;
       }
       break;
@@ -1005,7 +1006,7 @@ ocForm.setInitValue = function(key, num, widget, attr, value, fromId) {
       });
       break;
     case 'path':
-      if(key !== fromId){
+      if (isInitialLoad) {
         document.getElementById("oc-modal-data-" + key).dataset.path = value;
         document.getElementById(key).value = value;
       }
