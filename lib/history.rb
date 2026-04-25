@@ -370,6 +370,18 @@ helpers do
   end
 
   # Return a stable sort key for the selected History sort column.
+  def history_generic_value_sort_key(value)
+    normalized = format_history_table_value(nil, value).to_s.strip
+
+    if normalized.match?(/\A-?\d+\z/)
+      [0, normalized.to_i, normalized.downcase]
+    elsif normalized.match?(/\A-?\d+\.\d+\z/)
+      [1, normalized.to_f, normalized.downcase]
+    else
+      [2, normalized.downcase]
+    end
+  end
+
   def history_sort_key(job, sort)
     case sort
     when JOB_ID
@@ -391,15 +403,30 @@ helpers do
     when JOB_SUBMISSION_TIME
       [normalize_time_for_db(job[JOB_SUBMISSION_TIME]) || "", *history_job_id_sort_key(job[JOB_ID])]
     else
-      [job[sort].to_s.downcase, *history_job_id_sort_key(job[JOB_ID])]
+      [*history_generic_value_sort_key(job[sort]), *history_job_id_sort_key(job[JOB_ID])]
     end
   end
 
+  # Return whether the selected sort column can be ordered directly in SQLite.
+  def history_sql_sortable_column?(sort)
+    [
+      JOB_ID,
+      JOB_APP_NAME,
+      HEADER_SCRIPT_LOCATION,
+      HEADER_SCRIPT_NAME,
+      JOB_NAME,
+      JOB_PARTITION,
+      JOB_STATUS_ID,
+      JOB_SUBMISSION_TIME
+    ].include?(sort)
+  end
+
   # Return whether the request can use the SQL fast path.
-  # For now, only the no-search case is optimized. Search-specific filtering
-  # still falls back to the existing Ruby path.
-  def history_use_sql_fast_path?(filter)
-    history_filter_terms(filter).empty?
+  # For now, only the no-search case with SQL-sortable columns is optimized.
+  # Search-specific filtering and custom History columns still fall back to
+  # the existing Ruby path so sorting remains correct.
+  def history_use_sql_fast_path?(filter, sort)
+    history_filter_terms(filter).empty? && history_sql_sortable_column?(sort)
   end
 
   # Build SQL WHERE clauses and bind params for filters that map cleanly to DB columns.
@@ -1045,7 +1072,7 @@ helpers do
   def get_jobs_page(conf, cluster_name, statuses, filter, filter_column, date_from, date_to, filter_mode, sort, order, limit, offset)
     db = open_history_db(conf, cluster_name)
 
-    if history_use_sql_fast_path?(filter)
+    if history_use_sql_fast_path?(filter, sort)
       total_count = count_history_jobs(db, statuses, date_from, date_to)
       rows = total_count.zero? ? [] : fetch_history_jobs_page(db, statuses, date_from, date_to, sort, order, limit, offset)
       jobs = rows.map { |row| { JOB_ID => row["job_id"] }.merge(job_record_to_legacy_hash(row)) }
