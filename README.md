@@ -41,12 +41,12 @@ You can access the full documentation below:
 
 <table>
   <tr>
-    <td>Installation</td>
+    <td>Installation for administrator</td>
     <td><a href="https://riken-rccs.github.io/OpenComposer/docs/install.html" target="_blank">EN</a></td>
     <td><a href="https://riken-rccs.github.io/OpenComposer/docs/install_ja.html" target="_blank">JA</a>
   </tr>
   <tr>
-    <td>Application Settings</td>
+    <td>Application Settings for administrator</td>
     <td><a href="https://riken-rccs.github.io/OpenComposer/docs/application.html" target="_blank">EN</a></td>
     <td><a href="https://riken-rccs.github.io/OpenComposer/docs/application_ja.html" target="_blank">JA</a></td>
   </tr>
