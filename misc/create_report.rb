@@ -186,6 +186,12 @@ if $PROGRAM_NAME == __FILE__
   end
 
   parser.parse!(ARGV)
+
+  unless Dir.exist?(DEFAULT_LOG_ROOT)
+    warn "Directory not found: #{DEFAULT_LOG_ROOT}"
+    exit 1
+  end
+
   output_path = options[:output]
   write_report_csvs(
     output_path,
