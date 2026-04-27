@@ -905,7 +905,10 @@ ocForm.disableWidget = function(key, num, widget, value, size) {
 ocForm.setInitValue = function(key, num, widget, attr, value, fromId) {
   const id = num ? key + "_" + num : key;
   if ((attr === "min" || attr === "max" || attr === "step") && widget === "number") {
-    document.getElementById(id).setAttribute(attr, value);
+    const element = document.getElementById(id);
+    if (element !== null) {
+      element.setAttribute(attr, value);
+    }
   }
   else if (attr === "label" || attr == "help") {
     const text = document.getElementById(attr + "_" + id);
@@ -978,7 +981,10 @@ ocForm.setInitValue = function(key, num, widget, attr, value, fromId) {
     case 'text':
     case 'email':
       if (isInitialLoad) {
-        document.getElementById(id).value = value;
+        const element = document.getElementById(id);
+        if (element !== null) {
+          element.value = value;
+        }
       }
       break;
     case 'select':
@@ -1007,8 +1013,14 @@ ocForm.setInitValue = function(key, num, widget, attr, value, fromId) {
       break;
     case 'path':
       if (isInitialLoad) {
-        document.getElementById("oc-modal-data-" + key).dataset.path = value;
-        document.getElementById(key).value = value;
+        const modalData = document.getElementById("oc-modal-data-" + key);
+        const element = document.getElementById(key);
+        if (modalData !== null) {
+          modalData.dataset.path = value;
+        }
+        if (element !== null) {
+          element.value = value;
+        }
       }
       break;
     } // end widget
@@ -1098,9 +1110,19 @@ ocForm.setValue = function(key, num, widget, attr, value, fromId) {
     case 'number':
     case 'text':
     case 'email':
-    case 'path':
-      ocForm.setInitValue(key, num, widget, attr, value, fromId);
+    case 'path': {
+      const element = document.getElementById(id);
+      if (element !== null) {
+        element.value = value;
+      }
+      if (widget === 'path') {
+        const modalData = document.getElementById("oc-modal-data-" + key);
+        if (modalData !== null) {
+          modalData.dataset.path = value;
+        }
+      }
       break;
+    }
     case 'select':
       if (key !== fromId) {
         const selectBox = document.getElementById(key);
