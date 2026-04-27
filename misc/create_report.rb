@@ -11,12 +11,13 @@ DEFAULT_LOG_ROOT = "/var/log/ondemand-nginx"
 # Extract only Open Composer "Submit job" log lines from OnDemand nginx logs.
 #
 # Supported log format:
-# [2026-04-27 15:23:31 +0900] [Open Composer] Submit job :
+# App 622195 output: [2026-04-27 15:23:31 +0900] [Open Composer] Submit job :
 #   scheduler=Slurm : cluster=Prepost : job_ids=["578572"] :
 #   app_dir=Slurm : app_name=Job script for Prepost
 
 OPEN_COMPOSER_SUBMIT_LOG_PATTERN = %r{
   ^
+  App\ \d+\ output:\s+
   \[
     (?<timestamp>[^\]]+)
   \]
@@ -74,8 +75,18 @@ def each_log_line(path)
   end
 end
 
+def show_progress(current, total, path)
+  percent = total.zero? ? 100.0 : (current.to_f / total * 100)
+  message = format("Progress: %6.2f%% (%d/%d) %s", percent, current, total, path)
+  $stderr.print("\r#{message}")
+  $stderr.print("\n") if current == total
+end
+
 def load_submit_log_entries(username: nil)
-  target_log_paths(username: username).each_with_object([]) do |path, entries|
+  paths = target_log_paths(username: username)
+
+  paths.each_with_index.each_with_object([]) do |(path, index), entries|
+    show_progress(index + 1, paths.length, path)
     entry_username = username || path.sub("#{DEFAULT_LOG_ROOT}/", "").split("/").first
     each_log_line(path) do |line|
       parsed = parse_submit_log_line(line)
@@ -112,6 +123,14 @@ def count_by(entries)
   end
 end
 
+def report_suffix(username)
+  username ? "_#{username}" : "_all"
+end
+
+def suffixed_csv_path(output_dir, base_name, username)
+  File.join(output_dir, "#{base_name}#{report_suffix(username)}.csv")
+end
+
 def write_summary_csv(output_path, headers, rows)
   CSV.open(output_path, "w", write_headers: true, headers: headers) do |csv|
     rows.each do |row|
@@ -120,28 +139,28 @@ def write_summary_csv(output_path, headers, rows)
   end
 end
 
-def write_summary_by_user_csv(entries, output_dir)
+def write_summary_by_user_csv(entries, output_dir, username)
   counts = count_by(entries) { |entry| entry[:username].to_s }
   rows = counts.sort_by { |username, _count| username }
-  write_summary_csv(File.join(output_dir, "summary_by_user.csv"), %w[username submit_count], rows)
+  write_summary_csv(suffixed_csv_path(output_dir, "summary_by_user", username), %w[username submit_count], rows)
 end
 
-def write_summary_by_app_csv(entries, output_dir)
+def write_summary_by_app_csv(entries, output_dir, username)
   counts = count_by(entries) { |entry| entry[:app_name].to_s }
   rows = counts.sort_by { |app_name, _count| app_name }
-  write_summary_csv(File.join(output_dir, "summary_by_app.csv"), %w[app_name submit_count], rows)
+  write_summary_csv(suffixed_csv_path(output_dir, "summary_by_app", username), %w[app_name submit_count], rows)
 end
 
-def write_summary_by_user_app_csv(entries, output_dir)
+def write_summary_by_user_app_csv(entries, output_dir, username)
   counts = count_by(entries) { |entry| [entry[:username].to_s, entry[:app_name].to_s] }
   rows = counts.sort_by { |(username, app_name), _count| [username, app_name] }.map(&:flatten)
-  write_summary_csv(File.join(output_dir, "summary_by_user_app.csv"), %w[username app_name submit_count], rows)
+  write_summary_csv(suffixed_csv_path(output_dir, "summary_by_user_app", username), %w[username app_name submit_count], rows)
 end
 
-def write_summary_by_month_csv(entries, output_dir)
+def write_summary_by_month_csv(entries, output_dir, username)
   counts = count_by(entries) { |entry| month_key(entry[:timestamp]) }
   rows = counts.sort_by { |month, _count| month }
-  write_summary_csv(File.join(output_dir, "summary_by_month.csv"), %w[month submit_count], rows)
+  write_summary_csv(suffixed_csv_path(output_dir, "summary_by_month", username), %w[month submit_count], rows)
 end
 
 def write_entries_csv(entries, output_path)
@@ -152,15 +171,30 @@ def write_entries_csv(entries, output_path)
   end
 end
 
-def write_report_csvs(raw_output_path, username: nil)
-  output_dir = File.dirname(File.expand_path(raw_output_path))
+def output_paths(output_path, username)
+  output_dir = File.dirname(File.expand_path(output_path))
+  output_base = File.basename(output_path, File.extname(output_path))
+
+  {
+    raw: File.join(output_dir, "#{output_base}#{report_suffix(username)}.csv"),
+    summary_by_user: suffixed_csv_path(output_dir, "summary_by_user", username),
+    summary_by_app: suffixed_csv_path(output_dir, "summary_by_app", username),
+    summary_by_user_app: suffixed_csv_path(output_dir, "summary_by_user_app", username),
+    summary_by_month: suffixed_csv_path(output_dir, "summary_by_month", username)
+  }
+end
+
+def write_report_csvs(output_path, username: nil)
+  paths = output_paths(output_path, username)
   entries = load_submit_log_entries(username: username)
 
-  write_entries_csv(entries, raw_output_path)
-  write_summary_by_user_csv(entries, output_dir)
-  write_summary_by_app_csv(entries, output_dir)
-  write_summary_by_user_app_csv(entries, output_dir)
-  write_summary_by_month_csv(entries, output_dir)
+  write_entries_csv(entries, paths[:raw])
+  write_summary_by_user_csv(entries, File.dirname(paths[:summary_by_user]), username)
+  write_summary_by_app_csv(entries, File.dirname(paths[:summary_by_app]), username)
+  write_summary_by_user_app_csv(entries, File.dirname(paths[:summary_by_user_app]), username)
+  write_summary_by_month_csv(entries, File.dirname(paths[:summary_by_month]), username)
+
+  paths
 end
 
 if $PROGRAM_NAME == __FILE__
@@ -193,14 +227,13 @@ if $PROGRAM_NAME == __FILE__
   end
 
   output_path = options[:output]
-  write_report_csvs(
+  paths = write_report_csvs(
     output_path,
     username: options[:username]
   )
-  output_dir = File.dirname(File.expand_path(output_path))
-  puts "Wrote #{output_path}"
-  puts "Wrote #{File.join(output_dir, 'summary_by_user.csv')}"
-  puts "Wrote #{File.join(output_dir, 'summary_by_app.csv')}"
-  puts "Wrote #{File.join(output_dir, 'summary_by_user_app.csv')}"
-  puts "Wrote #{File.join(output_dir, 'summary_by_month.csv')}"
+  puts "Wrote #{paths[:raw]}"
+  puts "Wrote #{paths[:summary_by_user]}"
+  puts "Wrote #{paths[:summary_by_app]}"
+  puts "Wrote #{paths[:summary_by_user_app]}"
+  puts "Wrote #{paths[:summary_by_month]}"
 end
