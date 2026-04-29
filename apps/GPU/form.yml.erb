@@ -25,6 +25,7 @@ form:
       partition-gpu-options: '<%= gpu_data[:gpu_options] %>'
       unavailable-gpus: '<%= gpu_data[:unavailable] %>'
       gres-map: '<%= gpu_data[:gres_map] %>'
+      partition-gpu-max-gpus: '<%= gpu_data[:max_gpus] %>'
 <% end -%>
     options:
 <% partition_options.each do |opt| -%>

@@ -1182,6 +1182,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const hoursJson       = partitionSelect.getAttribute('data-partition-max-hours');
   const unavailJson     = partitionSelect.getAttribute('data-unavailable-gpus');
   const gresMapJson     = partitionSelect.getAttribute('data-gres-map');
+  const gpuMaxJson      = partitionSelect.getAttribute('data-partition-gpu-max-gpus');
 
   console.log('[OC-SLURM] data-partition-gpu-options present:', !!gpuOptionsJson);
   console.log('[OC-SLURM] data-partition-gpu-max-cores present:', !!coresJson);
@@ -1189,6 +1190,7 @@ document.addEventListener('DOMContentLoaded', function() {
   console.log('[OC-SLURM] data-partition-max-hours present:', !!hoursJson);
   console.log('[OC-SLURM] data-unavailable-gpus present:', !!unavailJson);
   console.log('[OC-SLURM] data-gres-map present:', !!gresMapJson);
+  console.log('[OC-SLURM] data-partition-gpu-max-gpus present:', !!gpuMaxJson);
 
   // Check if this is a CPU form with dynamic SLURM discovery
   const slurmDiscovery = partitionSelect.getAttribute('data-slurm-discovery');
@@ -1203,7 +1205,7 @@ document.addEventListener('DOMContentLoaded', function() {
     return;
   }
 
-  let gpuOptionsMap, coresMap, memoryMap, hoursMap, unavailMap, gresMap;
+  let gpuOptionsMap, coresMap, memoryMap, hoursMap, unavailMap, gresMap, gpuMaxMap;
   try {
     gpuOptionsMap = JSON.parse(gpuOptionsJson);
     coresMap      = coresJson ? JSON.parse(coresJson) : {};
@@ -1211,6 +1213,7 @@ document.addEventListener('DOMContentLoaded', function() {
     hoursMap      = hoursJson ? JSON.parse(hoursJson) : {};
     unavailMap    = unavailJson ? JSON.parse(unavailJson) : {};
     gresMap       = gresMapJson ? JSON.parse(gresMapJson) : {};
+    gpuMaxMap     = gpuMaxJson ? JSON.parse(gpuMaxJson) : {};
     console.log('[OC-SLURM] Parsed all JSON data successfully.');
   } catch (e) {
     console.error('[OC-SLURM] Failed to parse SLURM discovery data:', e);
@@ -1224,6 +1227,7 @@ document.addEventListener('DOMContentLoaded', function() {
   console.log('[OC-SLURM] hoursMap:', hoursMap);
   console.log('[OC-SLURM] unavailMap:', unavailMap);
   console.log('[OC-SLURM] gresMap:', gresMap);
+  console.log('[OC-SLURM] gpuMaxMap:', gpuMaxMap);
 
   const gpuTypeSelect  = document.getElementById('gpu_type');
   const coresInput     = document.getElementById('cores_memory_1');
@@ -1304,6 +1308,32 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   };
 
+  // Re-render script preview without calling execDynamicWidget (which would
+  // re-apply partition-level 1D set-max-* directives and overwrite our 2D values).
+  function refreshScriptPreview() {
+    var sv = [];
+    ocForm.updateScriptContents(sv);
+    ocForm.scriptArea.value = Object.values(sv).join('\n');
+    ocForm.updateHeight(ocForm.scriptArea);
+  }
+
+  // Helper: 2D lookup with fallback chain (shared across update functions)
+  function lookup2D(map, part, gpu, label) {
+    let source = '';
+    let val = null;
+    if (map[part] && map[part][gpu] !== undefined) {
+      val = map[part][gpu]; source = part + '+' + gpu;
+    } else if (map[part] && map[part]['any'] !== undefined) {
+      val = map[part]['any']; source = part + '+any';
+    } else if (map['all'] && map['all'][gpu] !== undefined) {
+      val = map['all'][gpu]; source = 'all+' + gpu;
+    } else if (map['all'] && map['all']['any'] !== undefined) {
+      val = map['all']['any']; source = 'all+any';
+    }
+    console.log('[OC-SLURM]   2D lookup', label + ':', val, '(from:', source || 'NOT FOUND' + ')');
+    return val;
+  }
+
   // 2D lookup: update resource limits based on partition + GPU type
   ocForm.updateResourceLimits = function() {
     const partition = partitionSelect.value;
@@ -1312,23 +1342,6 @@ document.addEventListener('DOMContentLoaded', function() {
       'any';
 
     console.log('[OC-SLURM] updateResourceLimits() — partition:', partition, '| gpuType:', gpuType);
-
-    // Helper: 2D lookup with fallback chain
-    function lookup2D(map, part, gpu, label) {
-      let source = '';
-      let val = null;
-      if (map[part] && map[part][gpu] !== undefined) {
-        val = map[part][gpu]; source = part + '+' + gpu;
-      } else if (map[part] && map[part]['any'] !== undefined) {
-        val = map[part]['any']; source = part + '+any';
-      } else if (map['all'] && map['all'][gpu] !== undefined) {
-        val = map['all'][gpu]; source = 'all+' + gpu;
-      } else if (map['all'] && map['all']['any'] !== undefined) {
-        val = map['all']['any']; source = 'all+any';
-      }
-      console.log('[OC-SLURM]   2D lookup', label + ':', val, '(from:', source || 'NOT FOUND' + ')');
-      return val;
-    }
 
     // Update cores max
     if (coresInput) {
@@ -1380,6 +1393,32 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   };
 
+  // 2D lookup: update GPU count limit based on partition + GPU type
+  ocForm.updateGpuCountLimits = function() {
+    const gpusInput = document.getElementById('gpus');
+    if (!gpusInput) return;
+
+    const partition = partitionSelect.value;
+    const gpuType = gpuTypeSelect ?
+      (gpuTypeSelect.options[gpuTypeSelect.selectedIndex]?.getAttribute('data-gpu-id') || 'any') :
+      'any';
+
+    console.log('[OC-SLURM] updateGpuCountLimits() — partition:', partition, '| gpuType:', gpuType);
+
+    const maxGpus = lookup2D(gpuMaxMap, partition, gpuType, 'gpus');
+    if (maxGpus !== null && maxGpus > 0) {
+      gpusInput.setAttribute('max', maxGpus);
+      const gpusLabel = document.getElementById('label_gpus');
+      if (gpusLabel) {
+        gpusLabel.innerHTML = 'Number of GPUs (1 - ' + maxGpus + ')';
+      }
+      if (parseInt(gpusInput.value) > maxGpus) {
+        console.log('[OC-SLURM]   clamping gpus from', gpusInput.value, 'to', maxGpus);
+        gpusInput.value = maxGpus;
+      }
+    }
+  };
+
   // Show warning if selected GPU type has all nodes down/drained
   ocForm.updateGpuAvailabilityWarning = function() {
     // Remove existing warning
@@ -1412,9 +1451,14 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('[OC-SLURM] === PARTITION CHANGED to:', partitionSelect.value, '===');
     setTimeout(function() {
       ocForm.repopulateGpuTypes();
-      ocForm.updateResourceLimits();
-      ocForm.updateGpuAvailabilityWarning();
+      // updateArea calls execDynamicWidget which re-applies partition-level
+      // set-max-* directives, so our 2D overrides must come AFTER it.
       ocForm.updateArea('script', 'partition');
+      ocForm.updateResourceLimits();
+      ocForm.updateGpuCountLimits();
+      ocForm.updateGpuAvailabilityWarning();
+      // Final script re-render to pick up any values clamped by 2D overrides
+      refreshScriptPreview();
     }, 0);
   });
 
@@ -1425,9 +1469,12 @@ document.addEventListener('DOMContentLoaded', function() {
         '| gpu-id:', sel?.getAttribute('data-gpu-id'),
         '| gres data-value:', sel?.getAttribute('data-value'), '===');
       setTimeout(function() {
-        ocForm.updateResourceLimits();
-        ocForm.updateGpuAvailabilityWarning();
         ocForm.updateArea('script', 'gpu_type');
+        ocForm.updateResourceLimits();
+        ocForm.updateGpuCountLimits();
+        ocForm.updateGpuAvailabilityWarning();
+        // Final script re-render to pick up any values clamped by 2D overrides
+        refreshScriptPreview();
       }, 0);
     });
   }
@@ -1437,10 +1484,14 @@ document.addEventListener('DOMContentLoaded', function() {
   setTimeout(function() {
     console.log('[OC-SLURM] === INITIAL RUN ===');
     ocForm.repopulateGpuTypes();
-    ocForm.updateResourceLimits();
-    ocForm.updateGpuAvailabilityWarning();
-    // Re-render script content now that data-values have been corrected
+    // updateArea calls execDynamicWidget which applies partition-level
+    // set-max-* directives; our 2D overrides must come AFTER.
     ocForm.updateArea('script', 'gpu_type');
+    ocForm.updateResourceLimits();
+    ocForm.updateGpuCountLimits();
+    ocForm.updateGpuAvailabilityWarning();
+    // Final script re-render to pick up any values clamped by 2D overrides
+    refreshScriptPreview();
     console.log('[OC-SLURM] === INITIAL RUN COMPLETE ===');
   }, 100);
 });
