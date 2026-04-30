@@ -1,0 +1,257 @@
+<%-
+# Include SLURM discovery partial (provides helpers + dynamic resource data)
+eval(ERB.new(File.read('./partials/slurm_discovery.erb'), trim_mode: '-').result(binding))
+
+# Build partition + GPU options; fall back to generic defaults if discovery fails.
+partition_options = generate_oc_partition_options(:gpu)
+gpu_options = generate_oc_gpu_options
+gpu_data = gpu_data_attributes
+
+if @dynamic_failed || partition_options.nil? || partition_options.empty?
+  partition_options = default_gpu_partition_options
+  gpu_options = default_gpu_type_options
+end
+
+initial_gpu_max = @global_max_gpus || 1
+-%>
+---
+form:
+  partition:
+    widget: select
+    label: Partition
+<% if !@dynamic_failed -%>
+    data:
+      partition-gpu-max-cores: '<%= gpu_data[:cores] %>'
+      partition-gpu-max-memory: '<%= gpu_data[:memory] %>'
+      partition-max-hours: '<%= gpu_data[:hours] %>'
+      partition-gpu-options: '<%= gpu_data[:gpu_options] %>'
+      unavailable-gpus: '<%= gpu_data[:unavailable] %>'
+      gres-map: '<%= gpu_data[:gres_map] %>'
+      partition-gpu-max-gpus: '<%= gpu_data[:max_gpus] %>'
+<% end -%>
+    options:
+<% partition_options.each do |opt| -%>
+      - <%= to_yaml_flow(opt) %>
+<% end -%>
+
+  cores_memory:
+    widget: number
+    label: [Number of cores, Memory]
+    size: 2
+    value: [1, 4]
+
+  gpu_type:
+    widget: select
+    label: GPU Arch
+<% if @dynamic_failed -%>
+    help: "SLURM GPU discovery is unavailable. The fallback configuration requests any available GPU."
+<% else -%>
+    help: "Auto-detected GPU types from Slurm. Choose 'any' if you do not have a preference."
+<% end -%>
+    options:
+<% gpu_options.each do |opt| -%>
+      - <%= to_yaml_flow(opt) %>
+<% end -%>
+
+  gpus:
+    widget: number
+    label: Number of GPUs (1 - <%= initial_gpu_max %>)
+    value: 1
+    min: 1
+    max: <%= initial_gpu_max %>
+    step: 1
+
+  time:
+    widget: number
+    label: [Max run time hours (0 - 24), Max run minutes (0 - 59)]
+    size: 2
+    value: [1, 0]
+    min: [0, 0]
+    max: [24, 59]
+    step: [1, 1]
+
+  version:
+    label: Software Version
+    widget: select
+    options:
+      - ["3.0.0"]
+      - ["3.0.1"]
+
+  json_path:
+    widget: path
+    required: false
+    label: json_path
+    help: |
+      Path to a single AlphaFold 3 input JSON file. Provide either this or input_dir.
+
+  input_dir:
+    widget: path
+    required: false
+    label: input_dir
+    help: |
+      Path to a directory of AlphaFold 3 input JSON files. Provide either this or json_path.
+
+  output_dir:
+    widget: path
+    required: yes
+    label: output_dir
+
+  db_dir:
+    widget: path
+    required: true
+    label: db_dir
+    help: |
+      Path to the AlphaFold 3 public databases directory for your site.
+
+  model_dir:
+    widget: path
+    required: true
+    label: model_dir
+    help: |
+      Path to the AlphaFold 3 model parameters directory for your site.
+
+  max_template_date:
+    label: max_template_date
+    widget: text
+    value: "2021-09-30"
+    help: |
+      Maximum template release date to consider. Format: YYYY-MM-DD.
+
+  show_advanced_option:
+    widget: checkbox
+    label:
+    options:
+      - [
+          "Show advanced option",
+          "",
+          show-run_data_pipeline,
+          show-run_inference,
+          show-num_diffusion_samples,
+          show-num_recycles,
+          show-num_seeds,
+          show-conformer_max_iterations,
+          show-mail_option,
+          show-email,
+          show-log,
+        ]
+
+  run_inference:
+    label: run_inference
+    widget: radio
+    value: true
+    options:
+      - ["true", true]
+      - ["false", false]
+    help: |
+      Whether to run model inference. This stage requires a GPU.
+
+  run_data_pipeline:
+    label: run_data_pipeline
+    widget: radio
+    value: true
+    options:
+      - ["true", true]
+      - ["false", false]
+    help: |
+      Whether to run the data pipeline, including genetic and template search.
+
+  num_diffusion_samples:
+    label: num_diffusion_samples
+    widget: number
+    min: 1
+    step: 1
+    required: false
+
+  num_recycles:
+    label: num_recycles
+    widget: number
+    min: 1
+    step: 1
+    required: false
+
+  num_seeds:
+    label: num_seeds
+    widget: number
+    min: 1
+    step: 1
+    required: false
+
+  conformer_max_iterations:
+    label: conformer_max_iterations
+    widget: number
+    min: 1
+    step: 1
+    required: false
+
+  mail_option:
+    label: Mail option
+    widget: checkbox
+    direction: horizontal
+    separator: ","
+    indent: 1
+    options:
+      - ["Beginning of job execution", "BEGIN", enable-email]
+      - ["End of job execution", "END", enable-email]
+      - ["Fail of job", "FAIL", enable-email]
+      - ["When the job is requeued", "REQUEUE", enable-email]
+      - ["All", "ALL", enable-email]
+
+  email:
+    widget: email
+    label: Email
+    indent: 2
+
+script: |
+  #!/bin/bash
+  #SBATCH -p #{partition}
+  #SBATCH -n #{cores_memory_1}
+  #SBATCH --mem #{cores_memory_2}G
+  #SBATCH -t #{time_1}:#{time_2}:00
+  #SBATCH --gres=gpu:#{:gpu_type_1}#{gpus}
+  #{gpu_type_2}
+  #SBATCH --mail-user=#{email}
+  #SBATCH --mail-type=#{mail_option}
+  #SBATCH --error=%x-%J-%u.err
+  #SBATCH --output=%x-%J-%u.out
+
+  module load alphafold3/#{version}
+
+  if [ -z "#{json_path}" ] && [ -z "#{input_dir}" ]; then
+    echo "Set either json_path or input_dir before submitting."
+    exit 1
+  fi
+
+  af_args=(
+    --output_dir="#{output_dir}"
+    --db_dir="#{db_dir}"
+    --model_dir="#{model_dir}"
+    --max_template_date="#{max_template_date}"
+    --run_data_pipeline="#{run_data_pipeline}"
+    --run_inference="#{run_inference}"
+  )
+
+  if [ -n "#{json_path}" ]; then
+    af_args+=(--json_path="#{json_path}")
+  fi
+
+  if [ -n "#{input_dir}" ]; then
+    af_args+=(--input_dir="#{input_dir}")
+  fi
+
+  if [ -n "#{num_diffusion_samples}" ]; then
+    af_args+=(--num_diffusion_samples="#{num_diffusion_samples}")
+  fi
+
+  if [ -n "#{num_recycles}" ]; then
+    af_args+=(--num_recycles="#{num_recycles}")
+  fi
+
+  if [ -n "#{num_seeds}" ]; then
+    af_args+=(--num_seeds="#{num_seeds}")
+  fi
+
+  if [ -n "#{conformer_max_iterations}" ]; then
+    af_args+=(--conformer_max_iterations="#{conformer_max_iterations}")
+  fi
+
+  run_alphafold.py "${af_args[@]}"

@@ -126,6 +126,12 @@ def parse_slurm_time(time_str)
   hours
 end
 
+def env_int(name, fallback)
+  Integer(ENV.fetch(name, fallback.to_s))
+rescue ArgumentError, TypeError
+  fallback
+end
+
 # Parse partition time limits from sinfo
 @partitions_info.each_line do |line|
   next if line.include?('PARTITION')
@@ -456,50 +462,40 @@ end
 
 # Static fallback partition options for CPU apps (when SLURM discovery fails)
 def default_cpu_partition_options
+  partition_name = ENV.fetch('OC_DEFAULT_CPU_PARTITION', 'cpu')
+  max_cores = env_int('OC_DEFAULT_CPU_MAX_CORES', 64)
+  max_memory_gb = env_int('OC_DEFAULT_CPU_MAX_MEMORY_GB', 256)
+  max_hours = env_int('OC_DEFAULT_CPU_MAX_HOURS', 24)
+
   [
-    ['batch', 'batch',
-      {'set-label-cores_memory_1' => 'Number of cores (1 - 64)'},
-      {'set-max-cores_memory_1' => 64},
-      {'set-label-cores_memory_2' => 'Memory (up to 500GB)'},
-      {'set-max-cores_memory_2' => 500},
-      {'set-label-time_1' => 'Max run time hours (0 - 168)'},
-      {'set-max-time_1' => 168}],
-    ['largemem', 'largemem',
-      {'set-label-cores_memory_1' => 'Number of cores (1 - 72)'},
-      {'set-max-cores_memory_1' => 72},
-      {'set-label-cores_memory_2' => 'Memory (up to 1000GB)'},
-      {'set-max-cores_memory_2' => 1000},
-      {'set-label-time_1' => 'Max run time hours (0 - 168)'},
-      {'set-max-time_1' => 168}],
-    ['preempt', 'preempt',
-      {'set-label-cores_memory_1' => 'Number of cores (1 - 64)'},
-      {'set-max-cores_memory_1' => 64},
-      {'set-label-cores_memory_2' => 'Memory (up to 1500GB)'},
-      {'set-max-cores_memory_2' => 1500},
-      {'set-label-time_1' => 'Max run time hours (0 - 168)'},
-      {'set-max-time_1' => 168}]
+    [partition_name, partition_name,
+      {'set-label-cores_memory_1' => "Number of cores (1 - #{max_cores})"},
+      {'set-max-cores_memory_1' => max_cores},
+      {'set-label-cores_memory_2' => "Memory (up to #{max_memory_gb}GB)"},
+      {'set-max-cores_memory_2' => max_memory_gb},
+      {'set-label-time_1' => "Max run time hours (0 - #{max_hours})"},
+      {'set-max-time_1' => max_hours}]
   ]
 end
 
 # Static fallback partition options for GPU apps (when SLURM discovery fails)
 def default_gpu_partition_options
+  partition_name = ENV.fetch('OC_DEFAULT_GPU_PARTITION', 'gpu')
+  max_cores = env_int('OC_DEFAULT_GPU_MAX_CORES', 64)
+  max_memory_gb = env_int('OC_DEFAULT_GPU_MAX_MEMORY_GB', 256)
+  max_gpus = env_int('OC_DEFAULT_GPU_MAX_GPUS', 1)
+  max_hours = env_int('OC_DEFAULT_GPU_MAX_HOURS', 24)
+
   [
-    ['gpu', 'gpu',
-      {'set-label-cores_memory_1' => 'Number of cores (1 - 64)'},
-      {'set-max-cores_memory_1' => 64},
-      {'set-label-cores_memory_2' => 'Memory (up to 500GB)'},
-      {'set-max-cores_memory_2' => 500},
-      {'set-label-gpus' => 'Number of GPUs (1 - 8)'},
-      {'set-max-gpus' => 8},
-      {'set-label-time_1' => 'Max run time hours (0 - 168)'},
-      {'set-max-time_1' => 168}],
-    ['preempt', 'preempt',
-      {'set-label-cores_memory_1' => 'Number of cores (1 - 128)'},
-      {'set-max-cores_memory_1' => 128},
-      {'set-label-cores_memory_2' => 'Memory (up to 1000GB)'},
-      {'set-max-cores_memory_2' => 1000},
-      {'set-label-time_1' => 'Max run time hours (0 - 168)'},
-      {'set-max-time_1' => 168}]
+    [partition_name, partition_name,
+      {'set-label-cores_memory_1' => "Number of cores (1 - #{max_cores})"},
+      {'set-max-cores_memory_1' => max_cores},
+      {'set-label-cores_memory_2' => "Memory (up to #{max_memory_gb}GB)"},
+      {'set-max-cores_memory_2' => max_memory_gb},
+      {'set-label-gpus' => "Number of GPUs (1 - #{max_gpus})"},
+      {'set-max-gpus' => max_gpus},
+      {'set-label-time_1' => "Max run time hours (0 - #{max_hours})"},
+      {'set-max-time_1' => max_hours}]
   ]
 end
 

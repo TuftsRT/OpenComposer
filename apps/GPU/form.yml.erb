@@ -11,6 +11,8 @@ if @dynamic_failed || partition_options.nil? || partition_options.empty?
   partition_options = default_gpu_partition_options
   gpu_options = default_gpu_type_options
 end
+
+initial_gpu_max = @global_max_gpus || 1
 -%>
 ---
 form:
@@ -42,7 +44,7 @@ form:
     widget: select
     label: GPU Arch
 <% if @dynamic_failed -%>
-    help: gpu partion only has p100 and a100
+    help: "SLURM GPU discovery is unavailable. The fallback configuration requests any available GPU."
 <% else -%>
     help: "Auto-detected GPU types from SLURM. Choose 'any' if you don't have a preference."
 <% end -%>
@@ -53,10 +55,10 @@ form:
 
   gpus:
     widget: number
-    label: Number of GPUs
+    label: Number of GPUs (1 - <%= initial_gpu_max %>)
     value: 1
     min: 1
-    max: 4
+    max: <%= initial_gpu_max %>
     step: 1
 
   time:
@@ -108,7 +110,7 @@ script: |
   #SBATCH --mem #{cores_memory_2}G
   #SBATCH -t #{time_1}:#{time_2}:00
   #SBATCH --gres=gpu:#{:gpu_type_1}#{gpus}
-  #SBATCH --constraint=#{gpu_type_2}
+  #{gpu_type_2}
   #SBATCH --mail-user=#{email}
   #SBATCH --mail-type=#{mail_option}
   #SBATCH --error=%x-%J-%u.err
