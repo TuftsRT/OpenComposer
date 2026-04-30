@@ -142,6 +142,28 @@ script: |
 
   module load #{modules}
 
+  export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-#{cores_memory_1}}"
+
+  echo "== Job context =="
+  echo "Host: $(hostname)"
+  echo "Working directory: $PWD"
+  echo "Partition: ${SLURM_JOB_PARTITION:-unknown}"
+  echo "Job ID: ${SLURM_JOB_ID:-unknown}"
+  echo "Node list: ${SLURM_JOB_NODELIST:-unknown}"
+  echo "OMP_NUM_THREADS: ${OMP_NUM_THREADS}"
+  echo
+
+  echo "== Loaded modules =="
+  module list 2>&1 || true
+  echo
+
+  cat <<'EOF'
+  Add your BioContainers command below. Typical patterns include:
+    samtools --help
+    blastp -query input.fa -db nr
+    python analysis.py
+  EOF
+
 check: |
   array_start = @array_1.to_s.strip
   array_end = @array_2.to_s.strip

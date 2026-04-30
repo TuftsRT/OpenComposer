@@ -214,7 +214,31 @@ script: |
   #SBATCH --error=%x-%J-%u.err
   #SBATCH --output=%x-%J-%u.out
 
+  set -euo pipefail
+
   module load alphafold3/#{version}
+
+  export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-#{cores_memory_1}}"
+
+  echo "== Job context =="
+  echo "Host: $(hostname)"
+  echo "Working directory: $PWD"
+  echo "Partition: ${SLURM_JOB_PARTITION:-unknown}"
+  echo "Job ID: ${SLURM_JOB_ID:-unknown}"
+  echo "Node list: ${SLURM_JOB_NODELIST:-unknown}"
+  echo "Visible GPUs: ${CUDA_VISIBLE_DEVICES:-not-set}"
+  echo "OMP_NUM_THREADS: ${OMP_NUM_THREADS}"
+  echo
+
+  echo "== Loaded modules =="
+  module list 2>&1 || true
+  echo
+
+  if command -v nvidia-smi >/dev/null 2>&1; then
+    echo "== NVIDIA GPU inventory =="
+    nvidia-smi --query-gpu=index,name,memory.total,driver_version --format=csv
+    echo
+  fi
 
   if [ -z "#{json_path}" ] && [ -z "#{input_dir}" ]; then
     echo "Set either json_path or input_dir before submitting."
@@ -253,5 +277,10 @@ script: |
   if [ -n "#{conformer_max_iterations}" ]; then
     af_args+=(--conformer_max_iterations="#{conformer_max_iterations}")
   fi
+
+  echo "== AlphaFold 3 command =="
+  printf 'run_alphafold.py'
+  printf ' %q' "${af_args[@]}"
+  printf '\n\n'
 
   run_alphafold.py "${af_args[@]}"
