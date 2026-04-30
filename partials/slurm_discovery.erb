@@ -302,10 +302,9 @@ end
 if @detected_types.empty?
   @options << ['none', 'none']
 else
-  @options << ['any', 'any']
-
   remaining = @detected_types.to_a
   remaining.sort_by! { |t| gpu_display_label(t) }
+  @options << ['any', 'any'] if remaining.length > 1
   remaining.each do |t|
     label = gpu_display_label(t)
     @options << [label, t]
@@ -320,9 +319,9 @@ build_opts = lambda do |types_set|
   if types_set.empty?
     local << ['none', 'none']
   else
-    local << ['any', 'any']
     remaining_local = types_set.to_a
     remaining_local.sort_by! { |t| gpu_display_label(t) }
+    local << ['any', 'any'] if remaining_local.length > 1
     remaining_local.each do |t|
       label = gpu_display_label(t)
       local << [label, t]

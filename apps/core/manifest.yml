@@ -1,0 +1,6 @@
+---
+name: Core
+category: Modules
+icon: fa-solid fa-cubes
+description: |
+  This application generates a Slurm job script for Core and OpenMPI module collections discovered automatically from the module tree.

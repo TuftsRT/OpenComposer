@@ -1,0 +1,164 @@
+<%-
+require 'pathname'
+
+eval(ERB.new(File.read('./partials/slurm_discovery.erb'), trim_mode: '-').result(binding))
+
+partition_options = generate_oc_partition_options(:cpu) || default_cpu_partition_options
+cpu_dynamic = !partition_options.empty?
+partition_options = default_cpu_partition_options unless cpu_dynamic
+default_email = "#{ENV['USER'] || 'user'}@tufts.edu"
+
+module_root = '/cluster/tufts/apps/container/biocontainers/modules'
+
+def discover_biocontainer_modules(module_root)
+  return [] unless Dir.exist?(module_root)
+
+  Dir.glob(File.join(module_root, '**', '*'), File::FNM_DOTMATCH)
+     .select { |path| File.file?(path) || File.symlink?(path) }
+     .reject do |path|
+       rel = Pathname.new(path).relative_path_from(Pathname.new(module_root)).to_s
+       parts = rel.split(File::SEPARATOR)
+       parts.any? { |part| part.start_with?('.') } || rel.empty?
+     end
+     .map do |path|
+       rel = Pathname.new(path).relative_path_from(Pathname.new(module_root)).to_s
+       rel.sub(/\.(lua|tcl)\z/, '')
+     end
+     .reject { |name| name.empty? || name.end_with?('/default') }
+     .uniq
+     .sort
+end
+
+module_options = discover_biocontainer_modules(module_root).map { |name| [name, name] }
+-%>
+---
+form:
+  partition:
+    widget: select
+    label: Partition
+<% if cpu_dynamic -%>
+    data:
+      slurm-discovery: 'cpu'
+<% end -%>
+    options:
+<% partition_options.each do |opt| -%>
+      - <%= to_yaml_flow(opt) %>
+<% end -%>
+
+  cores_memory:
+    widget: number
+    label: [Number of cores, Memory]
+    size: 2
+    value: [1, 4]
+
+  time:
+    widget: number
+    label: [Max run time hours (0 - 24), Max run minutes (0 - 59)]
+    size: 2
+    value: [1, 0]
+    min: [0, 0]
+    max: [24, 59]
+    step: [1, 1]
+
+  modules:
+    widget: multi_select
+    label: Load BioContainers modules
+    separator: " "
+    help: |
+      Available modules are scanned automatically from `<%= module_root %>` when the form is rendered.
+<% if module_options.empty? -%>
+    options:
+      - ["No modules found under <%= module_root %>", ""]
+<% else -%>
+    options:
+<% module_options.each do |opt| -%>
+      - <%= to_yaml_flow(opt) %>
+<% end -%>
+<% end -%>
+
+  workdir:
+    widget: path
+    required: false
+    label: Working Directory
+    help: |
+      Optional working directory for the job. If left blank, the job runs from the submission directory.
+    favorites:
+      - /cluster/tufts
+      - /cluster/home
+
+  show_advanced_option:
+    widget: checkbox
+    label:
+    options:
+      - ["Show advanced option", "", show-email, show-mail_option, show-array ]
+
+  array:
+    widget: number
+    label: [ Array Job (start index), Array Job (last index) ]
+    size: 2
+    indent: 1
+    min: [0, 0]
+    help: Each job executed from an array job is assigned a task ID, which can be referenced via `SLURM_ARRAY_TASK_ID`.
+
+  mail_option:
+    label: Mail option
+    widget: checkbox
+    direction: horizontal
+    separator: ","
+    indent: 1
+    options:
+      - [ "Beginning of job execution", 'BEGIN',   enable-email ]
+      - [ "End of job execution",       'END',     enable-email ]
+      - [ "Fail of job",                'FAIL',    enable-email ]
+      - [ "When the job is requeued",   'REQUEUE', enable-email ]
+      - [ "All",                        'ALL',     enable-email ]
+
+  email:
+    widget: email
+    label: Email
+    value: <%= default_email %>
+    indent: 2
+
+script: |
+  #!/bin/bash
+  #SBATCH -p #{partition}
+  #SBATCH -N 1
+  #SBATCH -n #{cores_memory_1}
+  #SBATCH --mem #{cores_memory_2}G
+  #SBATCH -t #{time_1}:#{time_2}:00
+  #SBATCH --array=#{array_1}-#{array_2}
+  #SBATCH --mail-user=#{email}
+  #SBATCH --mail-type=#{mail_option}
+  #SBATCH --error=%x-%J-%u.err
+  #SBATCH --output=%x-%J-%u.out
+
+  set -euo pipefail
+
+  if [[ -n "#{workdir}" ]]; then
+    cd "#{workdir}"
+  else
+    cd "${SLURM_SUBMIT_DIR:-$PWD}"
+  fi
+
+  module load #{modules}
+
+check: |
+  array_start = @array_1.to_s.strip
+  array_end = @array_2.to_s.strip
+
+  if array_start.empty? ^ array_end.empty?
+    halt 500, "Both array job start and end must be provided."
+  end
+
+  unless array_start.empty?
+    halt 500, "Array job start must be greater than 0." if @array_1.to_i <= 0
+    halt 500, "Array job end must be greater than 0." if @array_2.to_i <= 0
+    halt 500, "Array job end must be greater than or equal to start." if @array_2.to_i < @array_1.to_i
+  end
+
+  if @modules.is_a?(Array)
+    selected_modules = @modules.reject { |item| item.to_s.strip.empty? }
+    halt 500, "Select at least one BioContainers module." if selected_modules.empty?
+  elsif @modules.to_s.strip.empty?
+    halt 500, "Select at least one BioContainers module."
+  end

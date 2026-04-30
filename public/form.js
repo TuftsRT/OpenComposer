@@ -1266,9 +1266,13 @@ document.addEventListener('DOMContentLoaded', function() {
       option.id = 'gpu_type_' + (i + 1);
       option.value = label;
       // data-value is a JSON array for script substitution:
-      // #{:gpu_type_1}=gres_name_with_colon, #{gpu_type_2}=optional full constraint line
+      // #{:gpu_type_1}=gres_name_with_colon
+      // #{gpu_type_2}=optional full constraint line
+      // #{gpu_type_3}=optional full gres line
+      // #{gpu_type_4}=optional full constraint line
       const constraintLine = gresInfo[1] ? '#SBATCH --constraint=' + gresInfo[1] : '';
-      option.setAttribute('data-value', JSON.stringify([gresForScript, constraintLine]));
+      const gresLine = gresInfo[0] ? '#SBATCH --gres=gpu:' + gresForScript + '#{gpus}' : '';
+      option.setAttribute('data-value', JSON.stringify([gresForScript, constraintLine, gresLine, constraintLine]));
       // data-gpu-id is the internal identifier for 2D resource lookups
       option.setAttribute('data-gpu-id', gpuId);
       option.textContent = label;
