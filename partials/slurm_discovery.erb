@@ -331,8 +331,8 @@ build_opts = lambda do |types_set|
 end
 
 @all_partitions = @detected_by_partition.keys.select { |p| @user_partitions.include?(p) }
-@all_partitions.each do |p|
-  @partition_options_map[p] = build_opts.call(@detected_by_partition[p])
+@user_partitions.each do |p|
+  @partition_options_map[p] = build_opts.call(@detected_by_partition[p] || Set.new)
 end
 
 @partition_options_map['all'] = @options
