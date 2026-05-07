@@ -497,6 +497,15 @@ def set_check_value(key, value, separator = nil)
   end
 end
 
+def normalize_mail_type_lines(script_content)
+  script_content.gsub(/^(\s*#SBATCH\s+--mail-type=)(.+)$/) do
+    prefix = Regexp.last_match(1)
+    raw = Regexp.last_match(2)
+    values = raw.split(",").map(&:strip).reject(&:empty?)
+    values.any? { |v| v.upcase == "ALL" } ? "#{prefix}ALL" : "#{prefix}#{values.join(',')}"
+  end
+end
+
 # Output log
 def output_log(action, scheduler, **details)
   base = "[#{Time.now}] [Open Composer] #{action} : scheduler=#{scheduler.class.name}"
@@ -613,6 +622,7 @@ post "/*" do
     script_path    = File.join(script_location, script_name)
     script_dir     = File.dirname(script_path)
     script_content = params[OC_SCRIPT_CONTENT].gsub("\r\n", "\n") # Since HTML textarea for OC_SCRIPT_CONTENT is required, params[OC_SCRIPT_CONTENT] must not be nil.
+    script_content = normalize_mail_type_lines(script_content)
     form_action    = get_form_action(form)
     job_id         = nil
     submit_options = nil

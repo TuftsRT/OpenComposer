@@ -786,6 +786,11 @@ ocForm.showLine = function(selectedValues, line, keys, widgets, canHide, separat
   line = line.replace(/#\{basename\((.*?)\)\}/g, (match, inner) => {
     return ocForm.basename(inner);
   });
+
+  line = line.replace(/^(\s*#SBATCH\s+--mail-type=)(.+)$/m, (_, prefix, value) => {
+    const values = value.split(',').map(v => v.trim()).filter(v => v !== "");
+    return values.some(v => v.toUpperCase() === 'ALL') ? `${prefix}ALL` : `${prefix}${values.join(',')}`;
+  });
     
   if (line) {
     selectedValues.push(line);
