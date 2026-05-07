@@ -1498,6 +1498,36 @@ document.addEventListener('DOMContentLoaded', function() {
     ocForm.updateGpuAvailabilityWarning();
     // Final script re-render to pick up any values clamped by 2D overrides
     refreshScriptPreview();
-    console.log('[OC-SLURM] === INITIAL RUN COMPLETE ===');
+  console.log('[OC-SLURM] === INITIAL RUN COMPLETE ===');
   }, 100);
+});
+
+// Make the standard mail_option checkbox group treat ALL as mutually exclusive.
+document.addEventListener('DOMContentLoaded', function() {
+  const mailCheckboxes = Array.from(document.querySelectorAll('input[type="checkbox"][id^="mail_option_"]'));
+  if (mailCheckboxes.length === 0) return;
+
+  const allCheckbox = mailCheckboxes.find((checkbox) => checkbox.dataset.value === 'ALL');
+  if (!allCheckbox) return;
+
+  let syncingMailOptions = false;
+
+  mailCheckboxes.forEach((checkbox) => {
+    checkbox.addEventListener('change', function() {
+      if (syncingMailOptions) return;
+      syncingMailOptions = true;
+
+      if (this === allCheckbox && this.checked) {
+        mailCheckboxes.forEach((other) => {
+          if (other !== allCheckbox && other.checked) {
+            other.checked = false;
+          }
+        });
+      } else if (this !== allCheckbox && this.checked && allCheckbox.checked) {
+        allCheckbox.checked = false;
+      }
+
+      syncingMailOptions = false;
+    });
+  });
 });
