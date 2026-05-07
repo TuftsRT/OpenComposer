@@ -463,7 +463,12 @@ def set_check_value(key, value, separator = nil)
   if key.to_s == "mail_option"
     values = value.is_a?(Array) ? value.flatten.compact : value.to_s.split(separator || ",")
     normalized = values.map(&:to_s).map(&:strip).reject(&:empty?)
-    if normalized.any? { |v| v.upcase == "ALL" }
+    existing = if instance_variable_defined?(k)
+                 instance_variable_get(k).to_s.split(separator || ",").map(&:strip)
+               else
+                 []
+               end
+    if normalized.any? { |v| v.upcase == "ALL" } || existing.any? { |v| v.upcase == "ALL" }
       instance_variable_set(k, "ALL")
       return
     end
