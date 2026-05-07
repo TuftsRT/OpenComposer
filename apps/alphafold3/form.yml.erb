@@ -245,6 +245,14 @@ script: |
     exit 1
   fi
 
+  append_if_set() {
+    local flag="$1"
+    local value="$2"
+    if [ -n "$value" ]; then
+      af_args+=("${flag}=${value}")
+    fi
+  }
+
   af_args=(
     --output_dir="#{output_dir}"
     --db_dir="#{db_dir}"
@@ -254,29 +262,12 @@ script: |
     --run_inference="#{run_inference}"
   )
 
-  if [ -n "#{json_path}" ]; then
-    af_args+=(--json_path="#{json_path}")
-  fi
-
-  if [ -n "#{input_dir}" ]; then
-    af_args+=(--input_dir="#{input_dir}")
-  fi
-
-  if [ -n "#{num_diffusion_samples}" ]; then
-    af_args+=(--num_diffusion_samples="#{num_diffusion_samples}")
-  fi
-
-  if [ -n "#{num_recycles}" ]; then
-    af_args+=(--num_recycles="#{num_recycles}")
-  fi
-
-  if [ -n "#{num_seeds}" ]; then
-    af_args+=(--num_seeds="#{num_seeds}")
-  fi
-
-  if [ -n "#{conformer_max_iterations}" ]; then
-    af_args+=(--conformer_max_iterations="#{conformer_max_iterations}")
-  fi
+  append_if_set --json_path "#{json_path}"
+  append_if_set --input_dir "#{input_dir}"
+  append_if_set --num_diffusion_samples "#{num_diffusion_samples}"
+  append_if_set --num_recycles "#{num_recycles}"
+  append_if_set --num_seeds "#{num_seeds}"
+  append_if_set --conformer_max_iterations "#{conformer_max_iterations}"
 
   echo "== AlphaFold 3 command =="
   printf 'run_alphafold.py'
