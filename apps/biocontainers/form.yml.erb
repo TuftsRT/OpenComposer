@@ -86,11 +86,17 @@ form:
       - /cluster/tufts
       - /cluster/home
 
-  show_advanced_option:
+  show_mail_option:
     widget: checkbox
     label:
     options:
-      - ["Show advanced option", "", show-email, show-mail_option, show-array ]
+      - ["Mail Option", "", show-email, show-mail_option ]
+
+  show_array_option:
+    widget: checkbox
+    label:
+    options:
+      - ["Array Job", "", show-array ]
 
   array:
     widget: number

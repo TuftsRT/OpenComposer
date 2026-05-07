@@ -117,12 +117,24 @@ form:
     help: |
       Maximum template release date to consider. Format: YYYY-MM-DD.
 
-  show_advanced_option:
+  show_mail_option:
+    widget: checkbox
+    label:
+    options:
+      - ["Mail Option", "", show-mail_option, show-email]
+
+  show_array_option:
+    widget: checkbox
+    label:
+    options:
+      - ["Array Job", "", show-array ]
+
+  show_runtime_option:
     widget: checkbox
     label:
     options:
       - [
-          "Show advanced option",
+          "Runtime Options",
           "",
           show-run_data_pipeline,
           show-run_inference,
@@ -130,8 +142,6 @@ form:
           show-num_recycles,
           show-num_seeds,
           show-conformer_max_iterations,
-          show-mail_option,
-          show-email,
           show-log,
         ]
 
@@ -183,6 +193,14 @@ form:
     step: 1
     required: false
 
+  array:
+    widget: number
+    label: [ Array Job (start index), Array Job (last index) ]
+    size: 2
+    indent: 1
+    min: [0, 0]
+    help: Each job executed from an array job is assigned a task ID, which can be referenced via `SLURM_ARRAY_TASK_ID`.
+
   mail_option:
     label: Mail option
     widget: checkbox
@@ -207,6 +225,7 @@ script: |
   #SBATCH -n #{cores_memory_1}
   #SBATCH --mem #{cores_memory_2}G
   #SBATCH -t #{time_1}:#{time_2}:00
+  #SBATCH --array=#{array_1}-#{array_2}
   #SBATCH --gres=gpu:#{:gpu_type_1}#{gpus}
   #{gpu_type_2}
   #SBATCH --mail-user=#{email}
@@ -275,3 +294,17 @@ script: |
   printf '\n\n'
 
   run_alphafold.py "${af_args[@]}"
+
+check: |
+  array_start = @array_1.to_s.strip
+  array_end = @array_2.to_s.strip
+
+  if array_start.empty? ^ array_end.empty?
+    halt 500, "Both array job start and end must be provided."
+  end
+
+  unless array_start.empty?
+    halt 500, "Array job start must be greater than 0." if @array_1.to_i <= 0
+    halt 500, "Array job end must be greater than 0." if @array_2.to_i <= 0
+    halt 500, "Array job end must be greater than or equal to start." if @array_2.to_i < @array_1.to_i
+  end
