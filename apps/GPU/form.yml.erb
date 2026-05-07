@@ -82,16 +82,8 @@ form:
     options:
       - ["Array Job", "", show-array ]
 
-  array:
-    widget: number
-    label: [ Array Job (start index), Array Job (last index) ]
-    size: 2
-    indent: 1
-    min:  [0, 0]
-    help: Each job executed from an array job is assigned a task ID, which can be referenced in the shell script via the environment variable SLURM_ARRAY_TASK_ID.
-
   mail_option:
-    label: Mail option
+    label:
     widget: checkbox
     direction: horizontal
     separator: ","
@@ -107,6 +99,14 @@ form:
     widget: email
     label:  Email
     indent: 2
+
+  array:
+    widget: number
+    label: [ Array Job (start index), Array Job (last index) ]
+    size: 2
+    indent: 1
+    min:  [0, 0]
+    help: Each job executed from an array job is assigned a task ID, which can be referenced in the shell script via the environment variable SLURM_ARRAY_TASK_ID.
 
 script: |
   #!/bin/bash
