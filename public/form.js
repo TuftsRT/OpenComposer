@@ -590,12 +590,6 @@ ocForm.getValue = function(key, widget) {
 	}
       }
     });
-    if (cKey.baseKey === 'mail_option') {
-      const hasAll = value.some(v => String(v).toUpperCase() === 'ALL');
-      if (hasAll) {
-        return ['ALL'];
-      }
-    }
     return value;
   case 'path':
     if (!document.getElementById(key).disabled) {
@@ -786,12 +780,6 @@ ocForm.showLine = function(selectedValues, line, keys, widgets, canHide, separat
   line = line.replace(/#\{basename\((.*?)\)\}/g, (match, inner) => {
     return ocForm.basename(inner);
   });
-
-  line = line.replace(/^(\s*#SBATCH\s+--mail-type=)(.+)$/m, (_, prefix, value) => {
-    const values = value.split(',').map(v => v.trim()).filter(v => v !== "");
-    return values.some(v => v.toUpperCase() === 'ALL') ? `${prefix}ALL` : `${prefix}${values.join(',')}`;
-  });
-    
   if (line) {
     selectedValues.push(line);
   }
@@ -1511,54 +1499,4 @@ document.addEventListener('DOMContentLoaded', function() {
     refreshScriptPreview();
   console.log('[OC-SLURM] === INITIAL RUN COMPLETE ===');
   }, 100);
-});
-
-// Make the standard mail_option checkbox group treat ALL as mutually exclusive.
-document.addEventListener('DOMContentLoaded', function() {
-  function getMailCheckboxes() {
-    return Array.from(document.querySelectorAll('input[type="checkbox"][id^="mail_option_"]'));
-  }
-
-  function isAllMailCheckbox(checkbox) {
-    if (!checkbox) return false;
-    if (checkbox.dataset.value === 'ALL' || checkbox.value === 'ALL') return true;
-
-    const label = document.querySelector(`label[for="${checkbox.id}"]`);
-    return label ? label.textContent.trim().toUpperCase() === 'ALL' : false;
-  }
-
-  function syncMailOptions(changedCheckbox) {
-    const mailCheckboxes = getMailCheckboxes();
-    if (mailCheckboxes.length === 0) return;
-
-    const allCheckbox = mailCheckboxes.find(isAllMailCheckbox);
-    if (!allCheckbox) return;
-
-    const specificCheckboxes = mailCheckboxes.filter((checkbox) => checkbox !== allCheckbox);
-
-    if (changedCheckbox && changedCheckbox.checked) {
-      if (changedCheckbox === allCheckbox) {
-        specificCheckboxes.forEach((checkbox) => {
-          checkbox.checked = false;
-        });
-      } else {
-        allCheckbox.checked = false;
-      }
-    }
-
-    const anySpecificChecked = specificCheckboxes.some((checkbox) => checkbox.checked);
-    specificCheckboxes.forEach((checkbox) => {
-      checkbox.disabled = allCheckbox.checked;
-    });
-    allCheckbox.disabled = anySpecificChecked;
-  }
-
-  syncMailOptions();
-
-  document.addEventListener('change', function(event) {
-    const target = event.target;
-    if (!(target instanceof HTMLInputElement)) return;
-    if (target.type !== 'checkbox' || !target.id.startsWith('mail_option_')) return;
-    syncMailOptions(target);
-  }, true);
 });

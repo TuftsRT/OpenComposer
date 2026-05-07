@@ -460,20 +460,6 @@ end
 def set_check_value(key, value, separator = nil)
   k = :"@#{key}"
 
-  if key.to_s == "mail_option"
-    values = value.is_a?(Array) ? value.flatten.compact : value.to_s.split(separator || ",")
-    normalized = values.map(&:to_s).map(&:strip).reject(&:empty?)
-    existing = if instance_variable_defined?(k)
-                 instance_variable_get(k).to_s.split(separator || ",").map(&:strip)
-               else
-                 []
-               end
-    if normalized.any? { |v| v.upcase == "ALL" } || existing.any? { |v| v.upcase == "ALL" }
-      instance_variable_set(k, "ALL")
-      return
-    end
-  end
-
   if instance_variable_defined?(k)
     old = instance_variable_get(k)
 
@@ -494,15 +480,6 @@ def set_check_value(key, value, separator = nil)
     end
   else
     instance_variable_set(k, value)
-  end
-end
-
-def normalize_mail_type_lines(script_content)
-  script_content.gsub(/^(\s*#SBATCH\s+--mail-type=)(.+)$/) do
-    prefix = Regexp.last_match(1)
-    raw = Regexp.last_match(2)
-    values = raw.split(",").map(&:strip).reject(&:empty?)
-    values.any? { |v| v.upcase == "ALL" } ? "#{prefix}ALL" : "#{prefix}#{values.join(',')}"
   end
 end
 
@@ -622,7 +599,6 @@ post "/*" do
     script_path    = File.join(script_location, script_name)
     script_dir     = File.dirname(script_path)
     script_content = params[OC_SCRIPT_CONTENT].gsub("\r\n", "\n") # Since HTML textarea for OC_SCRIPT_CONTENT is required, params[OC_SCRIPT_CONTENT] must not be nil.
-    script_content = normalize_mail_type_lines(script_content)
     form_action    = get_form_action(form)
     job_id         = nil
     submit_options = nil
