@@ -590,6 +590,12 @@ ocForm.getValue = function(key, widget) {
 	}
       }
     });
+    if (cKey.baseKey === 'mail_option') {
+      const hasAll = value.some(v => String(v).toUpperCase() === 'ALL');
+      if (hasAll) {
+        return ['ALL'];
+      }
+    }
     return value;
   case 'path':
     if (!document.getElementById(key).disabled) {
