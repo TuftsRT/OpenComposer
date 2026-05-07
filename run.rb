@@ -460,6 +460,15 @@ end
 def set_check_value(key, value, separator = nil)
   k = :"@#{key}"
 
+  if key.to_s == "mail_option"
+    values = value.is_a?(Array) ? value.flatten.compact : value.to_s.split(separator || ",")
+    normalized = values.map(&:to_s).map(&:strip).reject(&:empty?)
+    if normalized.any? { |v| v.upcase == "ALL" }
+      instance_variable_set(k, "ALL")
+      return
+    end
+  end
+
   if instance_variable_defined?(k)
     old = instance_variable_get(k)
 
