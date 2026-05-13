@@ -1,0 +1,6 @@
+---
+name: Job Script (MPI)
+category: Jobs
+icon: fa-solid fa-network-wired
+description: |
+  This application generates a multi-node MPI job script for CPU partitions.
