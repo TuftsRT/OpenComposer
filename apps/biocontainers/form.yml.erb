@@ -76,16 +76,6 @@ form:
 <% end -%>
 <% end -%>
 
-  workdir:
-    widget: path
-    required: false
-    label: Working Directory
-    help: |
-      Optional working directory for the job. If left blank, the job runs from the submission directory.
-    favorites:
-      - /cluster/tufts
-      - /cluster/home
-
   show_mail_option:
     widget: checkbox
     label:
@@ -140,11 +130,7 @@ script: |
 
   set -euo pipefail
 
-  if [[ -n "#{workdir}" ]]; then
-    cd "#{workdir}"
-  else
-    cd "${SLURM_SUBMIT_DIR:-$PWD}"
-  fi
+  cd "${SLURM_SUBMIT_DIR:-$PWD}"
 
   module load #{modules}
 
