@@ -239,24 +239,8 @@ script: |
 
   export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-#{cores_memory_1}}"
 
-  echo "== Job context =="
-  echo "Host: $(hostname)"
-  echo "Working directory: $PWD"
-  echo "Partition: ${SLURM_JOB_PARTITION:-unknown}"
-  echo "Job ID: ${SLURM_JOB_ID:-unknown}"
-  echo "Node list: ${SLURM_JOB_NODELIST:-unknown}"
-  echo "Visible GPUs: ${CUDA_VISIBLE_DEVICES:-not-set}"
-  echo "OMP_NUM_THREADS: ${OMP_NUM_THREADS}"
-  echo
-
-  echo "== Loaded modules =="
-  module list 2>&1 || true
-  echo
-
   if command -v nvidia-smi >/dev/null 2>&1; then
-    echo "== NVIDIA GPU inventory =="
-    nvidia-smi --query-gpu=index,name,memory.total,driver_version --format=csv
-    echo
+    nvidia-smi
   fi
 
   if [ -z "#{json_path}" ] && [ -z "#{input_dir}" ]; then
@@ -287,11 +271,6 @@ script: |
   append_if_set --num_recycles "#{num_recycles}"
   append_if_set --num_seeds "#{num_seeds}"
   append_if_set --conformer_max_iterations "#{conformer_max_iterations}"
-
-  echo "== AlphaFold 3 command =="
-  printf 'run_alphafold.py'
-  printf ' %q' "${af_args[@]}"
-  printf '\n\n'
 
   run_alphafold.py "${af_args[@]}"
 

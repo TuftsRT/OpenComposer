@@ -201,37 +201,13 @@ script: |
 
   export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-#{cores_memory_1}}"
 
-  echo "== Job context =="
-  echo "Host: $(hostname)"
-  echo "Working directory: $PWD"
-  echo "Partition: ${SLURM_JOB_PARTITION:-unknown}"
-  echo "Job ID: ${SLURM_JOB_ID:-unknown}"
-  echo "Node list: ${SLURM_JOB_NODELIST:-unknown}"
-  echo "Visible GPUs: ${CUDA_VISIBLE_DEVICES:-not-set}"
-  echo
-
-  echo "== Loaded modules =="
-  module list 2>&1 || true
-  echo
-
   if command -v nvidia-smi >/dev/null 2>&1; then
-    echo "== NVIDIA GPU inventory =="
-    nvidia-smi --query-gpu=index,name,memory.total,driver_version --format=csv
-    echo
-    echo "== NVIDIA GPU status =="
     nvidia-smi
-    echo
-  else
-    echo "nvidia-smi not found in PATH."
-    echo
   fi
 
-  cat <<'EOF'
-  Add your NGC workload command below. Typical patterns include:
-    apptainer exec --nv <container.sif> <command> [args...]
-    python train.py --config <config>
-    torchrun --nproc_per_node=${SLURM_GPUS_ON_NODE:-1} train.py
-  EOF
+  # Add your NGC workload below.
+  # Example:
+  # apptainer exec --nv <container.sif> <command>
 
 check: |
   array_start = @array_1.to_s.strip

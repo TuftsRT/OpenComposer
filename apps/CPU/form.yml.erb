@@ -92,23 +92,10 @@ script: |
   set -euo pipefail
 
   export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-#{cores_memory_1}}"
-
-  echo "== Job context =="
-  echo "Host: $(hostname)"
-  echo "Working directory: $PWD"
-  echo "Partition: ${SLURM_JOB_PARTITION:-unknown}"
-  echo "Job ID: ${SLURM_JOB_ID:-unknown}"
-  echo "Node list: ${SLURM_JOB_NODELIST:-unknown}"
-  echo "OMP_NUM_THREADS: ${OMP_NUM_THREADS}"
-  echo
-
-  cat <<'EOF'
-  Add your CPU workload command below. Typical patterns include:
-    module load <module>
-    python script.py
-    bash pipeline.sh
-    srun <application> [args...]
-  EOF
+  # Add your CPU workload below.
+  # Example:
+  # module load <module>
+  # python script.py
 
 check: |
   array_start = @array_1.to_s.strip

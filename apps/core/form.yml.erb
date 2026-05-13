@@ -188,32 +188,13 @@ script: |
 
   export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-#{cores_memory_1}}"
 
-  echo "== Job context =="
-  echo "Host: $(hostname)"
-  echo "Working directory: $PWD"
-  echo "Partition: ${SLURM_JOB_PARTITION:-unknown}"
-  echo "Job ID: ${SLURM_JOB_ID:-unknown}"
-  echo "Node list: ${SLURM_JOB_NODELIST:-unknown}"
-  echo "Visible GPUs: ${CUDA_VISIBLE_DEVICES:-not-set}"
-  echo "OMP_NUM_THREADS: ${OMP_NUM_THREADS}"
-  echo
-
-  echo "== Loaded modules =="
-  module list 2>&1 || true
-  echo
-
   if command -v nvidia-smi >/dev/null 2>&1; then
-    echo "== NVIDIA GPU inventory =="
-    nvidia-smi --query-gpu=index,name,memory.total,driver_version --format=csv
-    echo
+    nvidia-smi
   fi
 
-  cat <<'EOF'
-  Add your module-based workload command below. Typical patterns include:
-    mpirun -np ${SLURM_NTASKS:-1} <application> [args...]
-    srun <application> [args...]
-    python script.py
-  EOF
+  # Add your command below.
+  # Example:
+  # srun <application> [args...]
 
 check: |
   array_start = @array_1.to_s.strip
