@@ -689,6 +689,18 @@ function evalCalc(expr) {
 
 // Output lines in the script contents.
 ocForm.showLine = function(selectedValues, line, keys, widgets, canHide, separators) {
+  if (line.includes("#{array_1}") && line.includes("#{array_2}")) {
+    const arrayStart = ocForm.getValue("array_1", "number");
+    const arrayEnd = ocForm.getValue("array_2", "number");
+    const arrayUnused = [arrayStart, arrayEnd].every(value => {
+      if (value === null) return true;
+      const trimmed = String(value).trim();
+      return trimmed === "" || Number(trimmed) === 0;
+    });
+
+    if (arrayUnused) return;
+  }
+
   // Check if line should be made visible
   for (const k in keys) {
     const value = ocForm.getValue(keys[k], widgets[k]);
