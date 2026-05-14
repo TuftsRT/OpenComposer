@@ -104,20 +104,6 @@ form:
       - ["python", python]
       - ["torchrun", torchrun]
 
-  script_path:
-    widget: path
-    required: true
-    label: Training Script
-    help: |
-      Path to the Python training script to run.
-
-  script_args:
-    widget: text
-    required: false
-    label: Script Arguments
-    help: |
-      Optional command-line arguments passed to the training script.
-
   show_mail_option:
     widget: checkbox
     label:
@@ -167,12 +153,12 @@ script: |
     nvidia-smi
   fi
 
-  if [ "#{launch_mode}" = "torchrun" ]; then
-    torchrun --nproc_per_node=#{gpus} "#{script_path}" #{script_args}
-  else
-    python "#{script_path}" #{script_args}
-  fi
+  # Add your PyTorch workload below.
+  # Example for a single-process run:
+  # python train.py
+  #
+  # Example for a multi-GPU run:
+  # torchrun --nproc_per_node=#{gpus} train.py
 
 check: |
   halt 500, "No PyTorch software version is available." if @version.to_s.strip.empty?
-  halt 500, "Training script is required." if @script_path.to_s.strip.empty?
