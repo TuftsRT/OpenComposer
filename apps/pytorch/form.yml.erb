@@ -149,8 +149,6 @@ script: |
   # Example for a single-process run:
   # python train.py
   #
-  # Example for a multi-GPU run:
-  # torchrun --nproc_per_node=#{gpus} train.py
 
 check: |
   halt 500, "No PyTorch software version is available." if @version.to_s.strip.empty?
