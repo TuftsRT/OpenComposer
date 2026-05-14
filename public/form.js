@@ -1,8 +1,19 @@
 
 // Adjust a textarea height based on the content.
 ocForm.updateHeight = function(area) {
-  area.style.height = 'auto';
+  if (!area) return;
+
+  if (!area.dataset.baseRows) {
+    area.dataset.baseRows = area.getAttribute('rows') || '2';
+  }
+
+  const computedStyle = window.getComputedStyle(area);
+  const lineHeight = parseFloat(computedStyle.lineHeight) || 24;
+  const minHeight = lineHeight * Number(area.dataset.baseRows);
+
   area.rows = area.value.split('\n').length;
+  area.style.height = 'auto';
+  area.style.height = `${Math.max(area.scrollHeight, minHeight)}px`;
 };
 
 // Return a valid suggestion items.
@@ -109,7 +120,7 @@ ocForm.handleKeyDown = function(event, id) {
 
   if (['ArrowDown', 'ArrowUp', 'Enter'].includes(event.key)) {
     event.preventDefault();
-    
+
     if (event.key === 'ArrowDown' && currentIndex < items.length - 1) {
       currentIndex++;
       ocForm.updateActiveItem(items, currentIndex, id);
@@ -124,7 +135,7 @@ ocForm.handleKeyDown = function(event, id) {
         ocForm.addSelectedItem(id);
       }
       if (currentIndex >= 0) {
-	input.value = items[currentIndex].textContent;
+  input.value = items[currentIndex].textContent;
       }
       suggestionsList.innerHTML = '';
     }
@@ -179,7 +190,7 @@ ocForm.updateHiddenValues = function(id) {
 ocForm.checkSubmitState = function(id) {
   const searchInput = ocForm.getSearchInput(id);
   const submitBotton = document.getElementById("_submitButton");
-  
+
   if (searchInput.dataset.required === "false") {
     submitBotton.disabled = false;
   }
@@ -261,7 +272,7 @@ ocForm.addSelectedItem = function(id) {
 
   if (selectedText && validSuggestions.includes(selectedText)) {
     const runAddBadge = () => addBadge();
-    
+
     if (!scriptOverwriteFlag && !submitOverwriteFlag) {
       runAddBadge();
     }
@@ -292,7 +303,7 @@ ocForm.loadFiles = function(scriptName, currentPath, key, showFiles, homeDir, is
       return ''; // Avoid empty string for root directory
     }
   });
-  
+
   const files_or_directory = scriptName + "/_file_or_directory";
   fetch(`${files_or_directory}?path=${encodeURIComponent(currentPath)}`)
     .then(response => response.json())
@@ -308,7 +319,7 @@ ocForm.loadFiles = function(scriptName, currentPath, key, showFiles, homeDir, is
         selectedPath.innerHTML += "/";
       }
     });
-  
+
   const checkbox = document.getElementById("oc-modal-checkbox-" + key);
   const filespath = scriptName + "/_files";
   fetch(`${filespath}?path=${encodeURIComponent(currentPath)}`)
@@ -326,13 +337,13 @@ ocForm.loadFiles = function(scriptName, currentPath, key, showFiles, homeDir, is
         const typeCell = document.createElement('td');
         typeCell.innerHTML = file.type === 'file' ? '&#x1f4c4;' : '&#x1F4C1;';
         typeCell.className = 'text-center';
-        
+
         const pathCell = document.createElement('td');
         const link = document.createElement('a');
         link.href = '#';
         link.textContent = file.name;
         link.dataset.path = file.path;
-        
+
         link.onclick = function(e) {
           e.preventDefault();
           ocForm.loadFiles(scriptName, file.path, key, showFiles, homeDir, false);
@@ -466,6 +477,10 @@ ocForm.showWidget = function(key, widget, size) {
     document.getElementById("label_" + key).style.display = 'block';
     document.getElementById('_form_layout').classList.add('row-cols-lg-2');
     document.getElementById("_form_container").style.removeProperty("max-width");
+
+    if (typeof ocForm.refreshEditorLayout === 'function') {
+      window.requestAnimationFrame(() => ocForm.refreshEditorLayout());
+    }
   }
   else {
     const parent = ocForm.getParentDiv(key, widget, size);
@@ -482,6 +497,10 @@ ocForm.hideWidget = function(key, widget, size) {
     document.getElementById("label_" + key).style.display = 'none';
     document.getElementById('_form_layout').classList.remove('row-cols-lg-2');
     document.getElementById("_form_container").style.maxWidth = '960px';
+
+    if (typeof ocForm.refreshEditorLayout === 'function') {
+      window.requestAnimationFrame(() => ocForm.refreshEditorLayout());
+    }
   }
   else {
     const parent = ocForm.getParentDiv(key, widget, size);
@@ -522,12 +541,12 @@ ocForm.getValue = function(key, widget) {
     if (e && !e.disabled && "selectedIndex" in e && e.selectedIndex !== -1) {
       const sValue = e.options[e.selectedIndex].dataset.value;
       try {
-	return (sKey.number !== null) ? JSON.parse(sValue)[Number(sKey.number)-1] : sValue;
+  return (sKey.number !== null) ? JSON.parse(sValue)[Number(sKey.number)-1] : sValue;
       }
       catch {
-	// If JSON.parse throws an error.
-	// For example, if the key is "hoge_1" but multiple items are not defined.
-	return sValue;
+  // If JSON.parse throws an error.
+  // For example, if the key is "hoge_1" but multiple items are not defined.
+  return sValue;
       }
     }
     break;
@@ -537,20 +556,20 @@ ocForm.getValue = function(key, widget) {
     if(!items.disabled && !document.getElementById(mKey.baseKey).disabled){
       const aTags = items.getElementsByTagName('a');
       if (aTags) {
-	return Array.from(aTags).map(a => {
-	  if (ocForm.multiSelectDisabledIndexes[a.textContent] !== undefined){
-	    return null;
-	  }
-	  else {
-	    const mValue = a.getAttribute('data-value');
-	    try {
-	      return (mKey.number !== null) ? JSON.parse(mValue)[Number(mKey.number)-1] : mValue;
-	    }
-	    catch {
-	      return mValue;
-	    }
-	  }
-	}).filter(value => value !== null);
+  return Array.from(aTags).map(a => {
+    if (ocForm.multiSelectDisabledIndexes[a.textContent] !== undefined){
+      return null;
+    }
+    else {
+      const mValue = a.getAttribute('data-value');
+      try {
+        return (mKey.number !== null) ? JSON.parse(mValue)[Number(mKey.number)-1] : mValue;
+      }
+      catch {
+        return mValue;
+      }
+    }
+  }).filter(value => value !== null);
       }
     }
     break;
@@ -558,13 +577,13 @@ ocForm.getValue = function(key, widget) {
     const rKey = ocForm.splitKeyAndNumber(key);
     for (const e of document.getElementsByName(rKey.baseKey)) {
       if (e.checked && !e.disabled) {
-	const rValue = e.dataset.value;
-	try {
+  const rValue = e.dataset.value;
+  try {
           return (rKey.number !== null) ? JSON.parse(rValue)[Number(rKey.number)-1] : rValue;
-	}
-	catch {
-	  return rValue;
-	}
+  }
+  catch {
+    return rValue;
+  }
       }
     }
     break;
@@ -577,17 +596,17 @@ ocForm.getValue = function(key, widget) {
       const checkbox = div.querySelector('input[type="checkbox"]');
       if (checkbox !== null && checkbox.checked && !checkbox.disabled) {
         const cValue = checkbox.dataset.value;
-	try {
-	  if (cKey.number !== null) {
+  try {
+    if (cKey.number !== null) {
             value.push(JSON.parse(cValue)[cKey.number-1]);
-	  }
-	  else {
+    }
+    else {
             value.push(cValue);
-	  }
-	}
-	catch {
-	  value.push(cValue);
-	}
+    }
+  }
+  catch {
+    value.push(cValue);
+  }
       }
     });
     return value;
@@ -597,7 +616,7 @@ ocForm.getValue = function(key, widget) {
     }
     break;
   }
-  
+
   return null;
 }
 
@@ -610,7 +629,7 @@ ocForm.dirname = function(path) {
 
   // Remove trailing slashes (except when the entire path is just "/")
   path = path.replace(/\/+$/, "");
-  
+
   // Find the last "/"
   const index = path.lastIndexOf("/");
 
@@ -712,12 +731,12 @@ ocForm.showLine = function(selectedValues, line, keys, widgets, canHide, separat
     value = typeof value === "number" ? String(value) : value;
     if (value != null && !Array.isArray(value)) { // If nothing is checked in the checkbox, value = [].
       const escapeSequences = {
-	"\\n": "\n",
-	"\\t": "\t",
-	"\\r": "\r",
-	"\\\\": "\\",
-	"\\\"": "\"",
-	"\\'": "'"
+  "\\n": "\n",
+  "\\t": "\t",
+  "\\r": "\r",
+  "\\\\": "\\",
+  "\\\"": "\"",
+  "\\'": "'"
       };
       value = value.replace(/\\[ntr\\'"]/g, match => escapeSequences[match]);
     }
@@ -725,7 +744,7 @@ ocForm.showLine = function(selectedValues, line, keys, widgets, canHide, separat
     if (value === null && canHide[k] === true) {
       value = ""
     }
-    
+
     if (value !== null) {
       if (canHide[k] === true) {
         keys[k] = ":" + keys[k];
@@ -846,18 +865,18 @@ ocForm.disableWidget = function(key, num, widget, value, size) {
     }
     else {
       document.getElementById(key + "_" + num).disabled = true;
-      
-      if (widget === 'select' && document.getElementById(key).selectedIndex === num - 1) {
-	const selectBox = document.getElementById(key);
 
-	// Find the next valid option
+      if (widget === 'select' && document.getElementById(key).selectedIndex === num - 1) {
+  const selectBox = document.getElementById(key);
+
+  // Find the next valid option
         const nextValidOption = Array.from(selectBox.options).find(option => !option.disabled)
-	if (nextValidOption) {
-	  selectBox.value = nextValidOption.value;
-	}
-	else {
-	  selectBox.selectedIndex = -1;
-	}
+  if (nextValidOption) {
+    selectBox.value = nextValidOption.value;
+  }
+  else {
+    selectBox.selectedIndex = -1;
+  }
       }
       else if (widget === 'radio' && document.getElementsByName(key)[num - 1].checked) {
         document.getElementsByName(key)[num - 1].checked = false;
@@ -897,7 +916,10 @@ ocForm.disableWidget = function(key, num, widget, value, size) {
 ocForm.setInitValue = function(key, num, widget, attr, value, fromId) {
   const id = num ? key + "_" + num : key;
   if ((attr === "min" || attr === "max" || attr === "step") && widget === "number") {
-    document.getElementById(id).setAttribute(attr, value);
+    const element = document.getElementById(id);
+    if (element !== null) {
+      element.setAttribute(attr, value);
+    }
   }
   else if (attr === "label" || attr == "help") {
     const text = document.getElementById(attr + "_" + id);
@@ -915,61 +937,65 @@ ocForm.setInitValue = function(key, num, widget, attr, value, fromId) {
       let input;
       switch (widget) {
       case "radio":
-	input = document.getElementById(id + "_1");
-	break;
+  input = document.getElementById(id + "_1");
+  break;
       case "checkbox":
-	input = num == "" ? document.getElementById("label_" + id) : document.getElementById(id);
-	break;
+  input = num == "" ? document.getElementById("label_" + id) : document.getElementById(id);
+  break;
       default:
-	input = document.getElementById(id);
+  input = document.getElementById(id);
       }
 
       if (required !== null && input !== null) {
-	switch (widget) {
-	case "checkbox":
-	  if (num === "") {
-	    input.setAttribute("data-required", value === "true");
-	    ocForm.validateCheckboxForSubmit(id);
-	  }
-	  else {
-	    if (value === "true") {
-	      input.setAttribute('required', '');
-	    }
-	    else {
-	      input.removeAttribute('required');
-	    }
-	  }
-	  break;
-	case "multi_select":
-	  const submitBotton = document.getElementById("_submitButton");
-	  if (value === "true") {
-	    const selectedItems = ocForm.getSelectedItems(id);
-	    const anchors = Array.from(selectedItems.getElementsByTagName('a'));
-	    submitBotton.disabled = anchors.length === 0;
-	  }
-	  else {
-	    const searchInput = ocForm.getSearchInput(id);
-	    submitBotton.disabled = false;
-	  }
-	  break;
-	default:
-	  if (value === "true") {
-	    input.setAttribute('required', '');
-	  }
-	  else {
-	    input.removeAttribute('required');
-	  }
-	}
+  switch (widget) {
+  case "checkbox":
+    if (num === "") {
+      input.setAttribute("data-required", value === "true");
+      ocForm.validateCheckboxForSubmit(id);
+    }
+    else {
+      if (value === "true") {
+        input.setAttribute('required', '');
+      }
+      else {
+        input.removeAttribute('required');
+      }
+    }
+    break;
+  case "multi_select":
+    const submitBotton = document.getElementById("_submitButton");
+    if (value === "true") {
+      const selectedItems = ocForm.getSelectedItems(id);
+      const anchors = Array.from(selectedItems.getElementsByTagName('a'));
+      submitBotton.disabled = anchors.length === 0;
+    }
+    else {
+      const searchInput = ocForm.getSearchInput(id);
+      submitBotton.disabled = false;
+    }
+    break;
+  default:
+    if (value === "true") {
+      input.setAttribute('required', '');
+    }
+    else {
+      input.removeAttribute('required');
+    }
+  }
       }
     }
   }
   else if (attr === "value") {
+    const isInitialLoad = typeof fromId === 'undefined';
     switch(widget){
     case 'number':
     case 'text':
     case 'email':
-      if (id !== fromId) {
-        document.getElementById(id).value = value;
+      if (isInitialLoad) {
+        const element = document.getElementById(id);
+        if (element !== null) {
+          element.value = value;
+        }
       }
       break;
     case 'select':
@@ -990,16 +1016,22 @@ ocForm.setInitValue = function(key, num, widget, attr, value, fromId) {
       const divs = parentDiv.parentElement.querySelectorAll('div');
 
       divs.forEach(div => {
-	const input = div.querySelector(`input[type="${widget}"]`);
-	if (input !== null) {
-  	  input.disabled = false;
-	}
+  const input = div.querySelector(`input[type="${widget}"]`);
+  if (input !== null) {
+      input.disabled = false;
+  }
       });
       break;
     case 'path':
-      if(key !== fromId){
-        document.getElementById("oc-modal-data-" + key).dataset.path = value;
-        document.getElementById(key).value = value;
+      if (isInitialLoad) {
+        const modalData = document.getElementById("oc-modal-data-" + key);
+        const element = document.getElementById(key);
+        if (modalData !== null) {
+          modalData.dataset.path = value;
+        }
+        if (element !== null) {
+          element.value = value;
+        }
       }
       break;
     } // end widget
@@ -1025,33 +1057,33 @@ ocForm.setValue = function(key, num, widget, attr, value, fromId) {
       let input;
       switch (widget) {
       case "radio":
-	input = document.getElementById(id + "_1");
-	break;
+  input = document.getElementById(id + "_1");
+  break;
       case "checkbox":
-	input = num == "" ? document.getElementById("label_" + id) : document.getElementById(id);
-	break;
+  input = num == "" ? document.getElementById("label_" + id) : document.getElementById(id);
+  break;
       default:
-	input = document.getElementById(id);
+  input = document.getElementById(id);
       }
 
       if (required !== null && input !== null) {
-	switch (widget) {
-	case "checkbox":
-	  if (num === "") {
-	    input.setAttribute("data-required", value === "true");
-	    ocForm.validateCheckboxForSubmit(id);
-	  }
-	  else {
-	    if (value === "true") {
-	      input.setAttribute('required', '');
-	    }
-	    else {
-	      input.removeAttribute('required');
-	    }
-	  }
-	  break;
-	case "multi_select":
-	  const submitBotton = document.getElementById("_submitButton");
+  switch (widget) {
+  case "checkbox":
+    if (num === "") {
+      input.setAttribute("data-required", value === "true");
+      ocForm.validateCheckboxForSubmit(id);
+    }
+    else {
+      if (value === "true") {
+        input.setAttribute('required', '');
+      }
+      else {
+        input.removeAttribute('required');
+      }
+    }
+    break;
+  case "multi_select":
+    const submitBotton = document.getElementById("_submitButton");
           if (value === "true") {
             const selectedItems = ocForm.getSelectedItems(id);
             const anchors = Array.from(selectedItems.getElementsByTagName('a'));
@@ -1061,26 +1093,26 @@ ocForm.setValue = function(key, num, widget, attr, value, fromId) {
             const searchInput = ocForm.getSearchInput(id);
             submitBotton.disabled = false;
           }
-	  break;
-	default:
-	  if (value === "true") {
-	    input.setAttribute('required', '');
-	  }
-	  else {
-	    input.removeAttribute('required');
-	  }
-	}
+    break;
+  default:
+    if (value === "true") {
+      input.setAttribute('required', '');
+    }
+    else {
+      input.removeAttribute('required');
+    }
+  }
       }
-      
+
       if (required !== null) {
-	if (value === "true" && required !== "true") {
-	  label.textContent = label.textContent.trim() + "*";
-	  label.style.display = "block";
-	}
-	else if (value === "false" && required === "true") {
-	  label.textContent = label.textContent.trim().slice(0, -1); // Delete only the last character (*).
-	  label.style.display = label.textContent !== "" ? "block" : "none";
-	}
+  if (value === "true" && required !== "true") {
+    label.textContent = label.textContent.trim() + "*";
+    label.style.display = "block";
+  }
+  else if (value === "false" && required === "true") {
+    label.textContent = label.textContent.trim().slice(0, -1); // Delete only the last character (*).
+    label.style.display = label.textContent !== "" ? "block" : "none";
+  }
       }
     }
   }
@@ -1089,9 +1121,19 @@ ocForm.setValue = function(key, num, widget, attr, value, fromId) {
     case 'number':
     case 'text':
     case 'email':
-    case 'path':
-      ocForm.setInitValue(key, num, widget, attr, value, fromId);
+    case 'path': {
+      const element = document.getElementById(id);
+      if (element !== null) {
+        element.value = value;
+      }
+      if (widget === 'path') {
+        const modalData = document.getElementById("oc-modal-data-" + key);
+        if (modalData !== null) {
+          modalData.dataset.path = value;
+        }
+      }
       break;
+    }
     case 'select':
       if (key !== fromId) {
         const selectBox = document.getElementById(key);
@@ -1113,17 +1155,17 @@ ocForm.setValue = function(key, num, widget, attr, value, fromId) {
     case 'radio':
     case 'checkbox':
       if (typeof fromId === 'undefined' || key !== fromId.replace(/_\d+$/, "")) { // hoge_2 -> hoge
-	const parentDiv = document.getElementById(key + '_1').closest('div');
-	const divs = parentDiv.parentElement.querySelectorAll('div');
-	divs.forEach(div => {
-	  const input = div.querySelector(`input[type="${widget}"]`);
-	  if (input !== null) {
+  const parentDiv = document.getElementById(key + '_1').closest('div');
+  const divs = parentDiv.parentElement.querySelectorAll('div');
+  divs.forEach(div => {
+    const input = div.querySelector(`input[type="${widget}"]`);
+    if (input !== null) {
             const label = div.querySelector(`label[for="${input.id}"]`);
             if (label.textContent === value) {
               input.checked = true;
             }
-	  }
-	});
+    }
+  });
       }
       break;
     } // end widget
@@ -1155,7 +1197,7 @@ ocForm.validateCheckboxForSubmit = function(key) {
 };
 
 // Show "Submitting..." on the button and disable it to prevent double submission.
-// The form is submitted normally and the button resets after page reload. 
+// The form is submitted normally and the button resets after page reload.
 ocForm.submitEffect = function(action) {
   const btn = document.getElementById('_submitButton');
   btn.disabled = true;
@@ -1166,13 +1208,12 @@ ocForm.submitEffect = function(action) {
     btn.value = 'Saving...';
   }
   // Note that confirm is not needed.
-    
+
   btn.classList.remove('btn-primary');
   btn.classList.add('btn-warning');
 
   return true;
 };
-
 // =============================================================================
 // Dynamic SLURM Resource Discovery — 2D partition+GPU lookups
 // Auto-activated only when data-* attributes are present on the partition select.
@@ -1509,6 +1550,6 @@ document.addEventListener('DOMContentLoaded', function() {
     ocForm.updateGpuAvailabilityWarning();
     // Final script re-render to pick up any values clamped by 2D overrides
     refreshScriptPreview();
-  console.log('[OC-SLURM] === INITIAL RUN COMPLETE ===');
+    console.log('[OC-SLURM] === INITIAL RUN COMPLETE ===');
   }, 100);
 });

@@ -53,16 +53,17 @@
 
   <div id="<%= FORM_LAYOUT %>" class="row row-cols-1 row-cols-lg-2 mx-1 bg-gradient" style="background: <%= @conf['form_color'] %>;">
     <!-- Form Body -->
-    <div class="col py-3">
+    <div class="col pt-3">
       <%= output_body(@body, @header, @manifest['name'], @manifest['dirname']) %>
     </div>
 
     <!-- Script Content Section -->
     <div class="col py-3 d-flex flex-column">
       <label id="label_<%= OC_SCRIPT_CONTENT %>" class="fw-semibold" for="<%= OC_SCRIPT_CONTENT %>"><%= @script_label %></label>
-      <textarea id="<%= OC_SCRIPT_CONTENT %>" name="<%= OC_SCRIPT_CONTENT %>" class="form-control mt-1 mb-3 flex-grow-1" tabindex="<%= @table_index %>" accesskey="s" onchange="ocForm.markManuallyModified('script')" oninput="ocForm.updateHeight(ocForm.scriptArea); ocForm.storePreviousValue('<%= OC_SCRIPT_CONTENT %>')" required>
-        (Something wrong)
-      </textarea>
+      <div id="<%= OC_SCRIPT_CONTENT %>_editor" class="position-relative mt-1 mb-3 flex-grow-1">
+        <pre id="<%= OC_SCRIPT_CONTENT %>_highlight_container" class="form-control mb-0" aria-hidden="true"><code id="<%= OC_SCRIPT_CONTENT %>_highlight" class="d-block"></code></pre>
+        <textarea id="<%= OC_SCRIPT_CONTENT %>" name="<%= OC_SCRIPT_CONTENT %>" class="form-control position-relative mb-0" tabindex="<%= @table_index %>" accesskey="s" spellcheck="false" onchange="ocForm.markManuallyModified('script')" oninput="ocForm.updateHeight(ocForm.scriptArea); ocForm.storePreviousValue('<%= OC_SCRIPT_CONTENT %>'); ocForm.syncScriptHighlight()" required>(Something wrong)</textarea>
+      </div>
       <!-- Submit Button -->
       <% if @form_action == "confirm" || @form_action == "confirm-save" %>
       <button class="btn btn-primary d-block w-100" id="<%= SUBMIT_BUTTON %>" type="button" data-bs-toggle="modal" data-bs-target="#modal-<%= SUBMIT_CONFIRM %>" tabindex="<%= @table_index + 1 %>">
@@ -78,9 +79,10 @@
               <div class="container-fluid">
                 <div class="row">
                   <div class="col">
-		    <textarea id="<%= SUBMIT_CONTENT %>" name="<%= SUBMIT_CONTENT %>" class="form-control flex-grow-1 w-100" rows="6" onchange="ocForm.markManuallyModified('submit')" oninput="ocForm.updateHeight(ocForm.submitArea); ocForm.storePreviousValue('<%= SUBMIT_CONTENT %>')">
-		      (Something Wrong)
-		    </textarea>
+                    <div id="<%= SUBMIT_CONTENT %>_editor" class="position-relative w-100">
+                      <pre id="<%= SUBMIT_CONTENT %>_highlight_container" class="form-control mb-0" aria-hidden="true"><code id="<%= SUBMIT_CONTENT %>_highlight" class="d-block"></code></pre>
+                      <textarea id="<%= SUBMIT_CONTENT %>" name="<%= SUBMIT_CONTENT %>" class="form-control position-relative mb-0 w-100" rows="6" spellcheck="false" onchange="ocForm.markManuallyModified('submit')" oninput="ocForm.updateHeight(ocForm.submitArea); ocForm.storePreviousValue('<%= SUBMIT_CONTENT %>'); ocForm.syncSubmitHighlight()">(Something Wrong)</textarea>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -88,7 +90,7 @@
             <div class="modal-footer">
               <button class="btn btn-secondary" data-bs-dismiss="modal" type="button">Close</button>
               <% if @form_action == "confirm" %>
-		          <button class="btn btn-primary" form="<%= SUBMIT_FORM %>" type="submit">Submit</button>
+              <button class="btn btn-primary" form="<%= SUBMIT_FORM %>" type="submit">Submit</button>
               <% elsif @form_action == "confirm-save" %>
               <button class="btn btn-primary" form="<%= SUBMIT_FORM %>" type="submit">Save</button>
               <% end %>
@@ -120,7 +122,11 @@
 <script>
 var ocForm = ocForm || {};
 ocForm.scriptArea = document.getElementById('<%= OC_SCRIPT_CONTENT %>');
+ocForm.scriptHighlightContainer = document.getElementById('<%= OC_SCRIPT_CONTENT %>_highlight_container');
+ocForm.scriptHighlight = document.getElementById('<%= OC_SCRIPT_CONTENT %>_highlight');
 ocForm.submitArea = document.getElementById('<%= SUBMIT_CONTENT %>');
+ocForm.submitHighlightContainer = document.getElementById('<%= SUBMIT_CONTENT %>_highlight_container');
+ocForm.submitHighlight = document.getElementById('<%= SUBMIT_CONTENT %>_highlight');
 </script>
 <script src="form.js"></script>
 <script>
@@ -135,7 +141,7 @@ ocForm.execDynamicWidget = function(fromId) {
 
   <%= @js["exec_dw"].chomp %>
 };
- 
+
 // Update the script section.
 ocForm.updateScriptContents = function(selectedValues) {
   <%= @js["script"].chomp %>
@@ -144,6 +150,68 @@ ocForm.updateScriptContents = function(selectedValues) {
 // Update the submit section.
 ocForm.updateSubmitContents = function(selectedValues) {
   <%= @js["submit"].chomp %>
+};
+
+// Rewrap scheduler directive lines after highlight.js tokenization.
+ocForm.decorateSchedulerDirectives = function(area, highlight) {
+  if (!area || !highlight) return;
+  const directivePattern = /^(?:#(?:PJM|SBATCH|PBS)\b|#\$)/;
+  const sourceLines = area.value.split('\n');
+  const highlightedLines = highlight.innerHTML.split('\n');
+
+  highlight.innerHTML = highlightedLines.map((lineHtml, index) => {
+    const sourceLine = sourceLines[index] || '';
+    if (!directivePattern.test(sourceLine.trimStart())) return lineHtml;
+
+    return `<span class="oc-scheduler-directive">${lineHtml}</span>`;
+  }).join('\n');
+};
+
+// Sync the caret color to the base text color of the highlighted code.
+ocForm.syncCaretColor = function(area, highlight) {
+  if (!area || !highlight) return;
+
+  const color = window.getComputedStyle(highlight).color;
+  if (color) {
+    area.style.caretColor = color;
+  }
+};
+
+// Sync a textarea content to the corresponding highlight area.
+ocForm.syncHighlight = function(area, highlight) {
+  if (!area || !highlight) return;
+
+  highlight.textContent = area.value;
+  highlight.removeAttribute('data-highlighted');
+  hljs.highlightElement(highlight);
+  ocForm.decorateSchedulerDirectives(area, highlight);
+  ocForm.syncCaretColor(area, highlight);
+};
+
+// Sync the script textarea content to the highlight area.
+ocForm.syncScriptHighlight = function() {
+  ocForm.syncHighlight(ocForm.scriptArea, ocForm.scriptHighlight);
+};
+
+// Sync the submit textarea content to the highlight area.
+ocForm.syncSubmitHighlight = function() {
+  ocForm.syncHighlight(ocForm.submitArea, ocForm.submitHighlight);
+};
+
+// Keep the highlight overlay visibility in sync with the textarea.
+ocForm.syncScriptHighlightVisibility = function() {
+  if (!ocForm.scriptArea || !ocForm.scriptHighlightContainer) return;
+
+  const isHidden = getComputedStyle(ocForm.scriptArea).display === 'none';
+  ocForm.scriptHighlightContainer.style.display = isHidden ? 'none' : '';
+};
+
+ocForm.refreshEditorLayout = function() {
+  ocForm.updateHeight(ocForm.scriptArea);
+  ocForm.updateHeight(ocForm.submitArea);
+  ocForm.syncScriptHighlight();
+  ocForm.syncSubmitHighlight();
+  ocForm.syncScriptHighlightVisibility();
 };
 
 // Check if a cache file exists.
@@ -223,7 +291,7 @@ ocForm.restorePreviousValue = function(id) {
       }
     }
   }
-	else if (element.type === "checkbox") {
+  else if (element.type === "checkbox") {
     element.checked = !element.checked;
   }
   else {
@@ -289,7 +357,7 @@ ocForm.confirmOverwrite = function(content_type, id, onDiscard) {
     onDiscard();
   };
 };
- 
+
 // content_type is "both", "script" or "submit"
 ocForm.updateArea = function(content_type, id = null) {
   let scriptValues = [];
@@ -297,16 +365,18 @@ ocForm.updateArea = function(content_type, id = null) {
 
   ocForm.execDynamicWidget(id);
 
-   if (content_type === "both" || content_type === "script") {
+  if (content_type === "both" || content_type === "script") {
     ocForm.updateScriptContents(scriptValues);
     ocForm.scriptArea.value = Object.values(scriptValues).join('\n');
     ocForm.updateHeight(ocForm.scriptArea);
+    ocForm.syncScriptHighlight();
   }
- 
+
   if (content_type === "both" || content_type === "submit") {
     ocForm.updateSubmitContents(submitValues);
     ocForm.submitArea.value = Object.values(submitValues).join('\n');
     ocForm.updateHeight(ocForm.submitArea);
+    ocForm.syncSubmitHighlight();
   }
 };
 
@@ -320,7 +390,18 @@ window.onload = function() {
   ocForm.updateSubmitContents(submitValues);
   ocForm.scriptArea.value = ocForm.isScriptCache() ? ocForm.loadScriptCache() : Object.values(scriptValues).join('\n');
   ocForm.submitArea.value = ocForm.isSubmitCache() ? ocForm.loadSubmitCache() : Object.values(submitValues).join('\n');
-  ocForm.updateHeight(ocForm.scriptArea);
-  ocForm.updateHeight(ocForm.submitArea);
+  ocForm.refreshEditorLayout();
+
+  window.addEventListener('resize', () => {
+    window.requestAnimationFrame(() => ocForm.refreshEditorLayout());
+  });
+
+  const submitModal = document.getElementById('modal-<%= SUBMIT_CONFIRM %>');
+  if (submitModal) {
+    // The modal content size is finalized only after it is shown.
+    submitModal.addEventListener('shown.bs.modal', () => {
+      ocForm.refreshEditorLayout();
+    });
+  }
 };
 </script>

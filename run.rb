@@ -2,7 +2,10 @@ require "sinatra"
 require "sinatra/reloader" if ENV.fetch("RACK_ENV", "production") == "development"
 require "yaml"
 require "erb"
+require "sqlite3"
+require "json"
 require "pstore"
+require "time"
 require "fileutils"
 require "./lib/index"
 require "./lib/form"
@@ -19,7 +22,7 @@ configure :development do
 end
 
 # Internal Constants
-VERSION                ||= "1.9.0"
+VERSION                ||= "2.0.0"
 SCHEDULERS_DIR_PATH    ||= "./lib/schedulers"
 HISTORY_ROWS           ||= 10
 JOB_STATUS             ||= { "queued" => "QUEUED", "running" => "RUNNING", "completed" => "COMPLETED", "failed" => "FAILED" }
@@ -74,7 +77,7 @@ def read_yaml(yml_path)
   elsif File.exist?(yml_path)
     return YAML.load_file(yml_path)
   end
-  
+
   return nil
 end
 
@@ -107,7 +110,7 @@ def create_conf
       end
     end
   end
-  
+
   # Set initial values if not defined
   conf["data_dir"]                ||= ENV["HOME"] + "/composer"
   conf["history"]                 ||= HISTORY_KEY_MAP.keys
@@ -119,10 +122,12 @@ def create_conf
   conf["category_color"]          ||= "#5522BB"
   conf["description_color"]       ||= conf["category_color"]
   conf["form_color"]              ||= "#BFCFE7"
-  conf["non_script_color"]        ||= "#FFDB69"
-  conf["non_script_button_color"] ||= "#FFA000"
+  conf["non_script_color"]        ||= "#FFE28A"
+  conf["non_script_button_color"] ||= "#FFBF00"
   conf["submit_color"]            ||= "#FFCCCC"
   conf["submit_button_color"]     ||= "#FFAAAA"
+  conf["highlight_theme"]         ||= "vs"
+  conf["directive_color"]         ||= "#D73A49"
 
   # Set the values for "clusters:" and "history_db"
   if conf.key?("clusters")
@@ -130,17 +135,17 @@ def create_conf
     defaults  = CLUSTERS_KEYS.to_h { |k| [k, conf[k]] }
     CLUSTERS_KEYS.each { |k| conf[k] = {} }
     conf["history_db"] = {}
-    
+
     clusters.each_key do |name|
       cluster_conf = clusters[name] || {}
       CLUSTERS_KEYS.each do |key|
         conf[key][name] = cluster_conf.fetch(key, defaults[key]) || defaults[key]
       end
-      
-      conf["history_db"][name] = File.join(conf["data_dir"], "#{name}.db")
+
+      conf["history_db"][name] = File.join(conf["data_dir"], "#{name}.sqlite3")
     end
   else
-    conf["history_db"] = File.join(conf["data_dir"], "#{conf["scheduler"]}.db")
+    conf["history_db"] = File.join(conf["data_dir"], "#{conf["scheduler"]}.sqlite3")
   end
 
   # Create data directory
@@ -160,7 +165,7 @@ def create_manifest(app_path)
 
   ## Reject deprecated "related_app:" configuration in v1.8.0 and later
   halt 500, "In #{File.join(app_path, "manifest.yml")}, related_app: is deprecated." if manifest&.key?("related_app")
-  
+
   dirname = File.basename(app_path)
   return Manifest.new(dirname, dirname, nil, nil, nil, nil) if manifest.nil?
 
@@ -324,23 +329,32 @@ def show_website(job_id = nil, error_msg = nil, error_params = nil, script_path 
     @error_msg     = update_status(@conf, @scheduler, @bin, @bin_overrides, @ssh_wrapper, @cluster_name)
     return erb :error if @error_msg != nil
 
-    @status       = escape_html(params["status"] || "all")
+    @statuses     = parse_history_statuses(params["statuses"])
     @filter       = escape_html(params["filter"])
-    all_jobs      = get_all_jobs(@conf, @cluster_name, @status, @filter)
-    @jobs_size    = all_jobs.size
-    @rows         = [[(params["rows"] || HISTORY_ROWS).to_i, 1].max, @jobs_size].min
-    @page_size    = (@rows == 0) ? 1 : ((@jobs_size - 1) / @rows) + 1
+    @filter_column = parse_history_filter_column(params["filter_column"], @conf)
+    @sort         = parse_history_sort(params["sort"], @conf)
+    @order        = parse_history_order(params["order"])
+    @date_range, raw_date_from, raw_date_to = parse_history_date_range(params["date_range"], params["date_from"], params["date_to"])
+    @date_from    = escape_html(raw_date_from)
+    @date_to      = escape_html(raw_date_to)
+    @filter_mode  = escape_html(params["filter_mode"] || "and")
+    @detail_open  = escape_html(params["detail_open"] || "false")
+    requested_rows = [(params["rows"] || HISTORY_ROWS).to_i, 1].max
     @current_page = (params["p"] || 1).to_i
+    offset = (@current_page - 1) * requested_rows
+    history_search_started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    @jobs, @jobs_size = get_jobs_page(@conf, @cluster_name, @statuses, @filter, @filter_column, @date_from, @date_to, @filter_mode, @sort, @order, requested_rows, offset)
+    @history_search_elapsed_seconds = Process.clock_gettime(Process::CLOCK_MONOTONIC) - history_search_started_at
+    @rows         = [requested_rows, @jobs_size].min
+    @page_size    = (@rows == 0) ? 1 : ((@jobs_size - 1) / @rows) + 1
     @start_index  = @jobs_size == 0 ? 0 : (@current_page - 1) * @rows
     @end_index    = @jobs_size == 0 ? 0 : [@current_page * @rows, @jobs_size].min - 1
-    @jobs         = @start_index >= @jobs_size ? [] : all_jobs[@start_index..@end_index]
     @error_msg    = error_msg
 
-    @history_hash = @conf["history"].each_with_object({}) do |(key, opt), h|
-      key = key.to_s
-      label = opt && opt["label"] || HISTORY_KEY_MAP.fetch(key, key)
-      h[key] = label
-    end
+    @history_hash = history_config_items(@conf).to_h
+    @filter_column_items = history_filter_column_items(@conf)
+    @date_range_items = history_date_range_items
+    @history_search_elapsed_label = format("%.3f", @history_search_elapsed_seconds || 0.0)
 
     return erb :history
   else # application form
@@ -366,11 +380,11 @@ def show_website(job_id = nil, error_msg = nil, error_params = nil, script_path 
       ["form.yml", "form.yml.erb"].each do |name|
         file = File.join(@apps_dir, @dir_name, name)
         next unless File.exist?(file)
-        
+
         halt 500, "In ./#{file}, \"form:\" must be defined." unless @body.key?("form")
         halt 500, "In ./#{file}, \"form:\" must have a key." unless @body["form"]
       end
-      
+
       @form_action = get_form_action(@body)
       @script_overwrite_warning_enabled = check_overwrite_warning?(@body["script"])
       @submit_overwrite_warning_enabled = check_overwrite_warning?(@body["submit"])
@@ -391,29 +405,25 @@ def show_website(job_id = nil, error_msg = nil, error_params = nil, script_path 
       @script_content = nil
       @submit_content = nil
       if params["jobId"] || job_id
-        history_db = if @conf.key?("clusters")
-                       cluster_name = params[params["jobId"] ? "cluster" : HEADER_CLUSTER_NAME] || @conf["clusters"].keys.first
-                       @conf["history_db"][cluster_name]
-                     else
-                       @conf["history_db"]
-                     end
+        cluster_name = if @conf.key?("clusters")
+                         params[params["jobId"] ? "cluster" : HEADER_CLUSTER_NAME] || @conf["clusters"].keys.first
+                       end
 
-        if history_db.nil? || !File.exist?(history_db)
+        cache = nil
+        id = if params["jobId"]
+               params["jobId"]
+             else
+               job_id.is_a?(Array) ? job_id[0].to_s : job_id.to_s
+             end
+        begin
+          db = open_history_db(@conf, cluster_name)
+        rescue StandardError
+          history_db = @conf.key?("clusters") ? @conf["history_db"][cluster_name] : @conf["history_db"]
           @error_msg = history_db.nil? ? "#{cluster_name} is not invalid." : "#{history_db} is not found."
           return erb :error
         end
-
-        cache = nil
-        id = nil
-        db = PStore.new(history_db)
-        db.transaction(true) do
-          id = if params["jobId"]
-                 params["jobId"]
-               else
-                 job_id.is_a?(Array) ? job_id[0].to_s : job_id.to_s
-               end
-          cache = db[id]
-        end
+        record = find_job(db, id)
+        cache = job_record_to_legacy_hash(record)
 
         if cache.nil?
           @error_msg = "Specified Job ID (#{id}) is not found."
@@ -514,7 +524,7 @@ get "/_files" do
     # When a non-existent directory is specified using the set-value statement of the dynamic form widget.
     entries = ""
   end
-  
+
   { files: entries }.to_json
 end
 
@@ -529,12 +539,13 @@ get "/_file_or_directory" do
     { type: "directory" }.to_json
   end
 end
-    
+
 get "/*" do
   show_website
 end
 
 post "/*" do
+  # Keep POST handlers on the local conf object. @conf is initialized in show_website.
   conf          = create_conf
   cluster_name  = if conf.key?("clusters")
                     params[request.path_info == "/history" ? "cluster" : HEADER_CLUSTER_NAME] || conf["clusters"].keys.first
@@ -559,10 +570,10 @@ post "/*" do
       output_log("Cancel job", scheduler, cluster: cluster_name, job_ids: job_ids)
     when "DeleteInfo"
       if File.exist?(history_db)
-        db = PStore.new(history_db)
+        db = open_history_db(conf, conf.key?("clusters") ? cluster_name : nil)
         db.transaction do
           job_ids.each do |job_id|
-            db.delete(job_id)
+            delete_job(db, job_id)
           end
         end
         output_log("Delete job information", scheduler, cluster: cluster_name, job_ids: job_ids)
@@ -619,7 +630,7 @@ post "/*" do
         end
         widget = form["form"][key]&.dig("widget") || (base_key && form["form"][base_key]&.dig("widget"))
         next unless widget
-        
+
         if ["number"].include?(widget)
           set_check_value(key, value.to_f == value.to_i ? value.to_i : value.to_f)
         elsif ["text", "email", "path"].include?(widget)
@@ -657,7 +668,7 @@ post "/*" do
         return show_website(nil, e.message, params)
       end
     end
-    
+
     # Save a job script
     FileUtils.mkdir_p(script_location)
     File.open(script_path, "w") { |file| file.write(script_content) }
@@ -683,7 +694,7 @@ post "/*" do
       unless status.success?
         return show_website(nil, stderr, params)
       end
-      
+
       last_line = stdout.lines.last&.strip
       submit_options = (last_line == "__UNDEFINED__") ? nil : last_line
     end
@@ -693,18 +704,35 @@ post "/*" do
       output_log("Save job file", scheduler, cluster: cluster_name, app_dir: manifest["dirname"], app_name: manifest["name"], category: manifest["category"], script_path: script_path)
       return show_website(nil, nil, params, script_path)
     end
-    
+
     Dir.chdir(script_dir) do
       job_id, error_msg = scheduler.submit(script_path, escape_html(job_name.strip), submit_options, bin, bin_overrides, ssh_wrapper)
-      params[JOB_SUBMISSION_TIME] = Time.now.strftime("%Y-%m-%d %H:%M:%S")
+      params[JOB_SUBMISSION_TIME] = Time.now.iso8601
     end
 
     # Save a job history
     FileUtils.mkdir_p(data_dir)
-    db = PStore.new(history_db)
+    db = open_history_db(conf, conf.key?("clusters") ? cluster_name : nil)
+    submission_time = params[JOB_SUBMISSION_TIME]
+    submit_data = params.to_h.merge(
+      "app_name" => params[JOB_APP_NAME],
+      "app_dir_name" => params[JOB_DIR_NAME],
+      "script_location" => params[HEADER_SCRIPT_LOCATION],
+      "script_name" => params[HEADER_SCRIPT_NAME],
+      "job_name" => params[HEADER_JOB_NAME].to_s,
+      "partition" => params[JOB_PARTITION].to_s,
+      "submission_time" => submission_time,
+      "updated_time" => submission_time,
+      "status" => JOB_STATUS["queued"]
+    )
     db.transaction do
       Array(job_id).each do |id|
-        db[id] = params
+        record = build_job_record(
+          existing: nil,
+          submit_data: submit_data.merge("job_id" => id.to_s),
+          scheduler_data: nil
+        )
+        upsert_job(db, record)
       end
     end
 

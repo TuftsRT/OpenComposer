@@ -35,7 +35,7 @@ class Sge < Scheduler
     transformed_jobs = jobs.map do |job_id|
       job_id.include?(".") ? job_id.gsub(".", " -t ") : job_id # "123.4" -> "123 -t 4"
     end
-      
+
     command = [ssh_wrapper, qdel, transformed_jobs.join(' ')].compact.join(" ")
     stdout, stderr, status = Open3.capture3(command)
     return status.success? ? nil : [stdout, stderr].join(" ")
@@ -57,19 +57,19 @@ class Sge < Scheduler
     job_partition = job_status_id == JOB_STATUS["running"] ? columns[7] : "" # At the time of queued, the partition is undecided.
     [job_name, job_partition, job_status_id]
   end
-  
+
   # Parses a block of job information extracted from the qacct output.
   def parse_block(block)
     key_map = { "jobname" => JOB_NAME, "qname" => JOB_PARTITION }
     block.lines.each_with_object({}) do |line, info|
       key, value = line.strip.split(' ', 2)
       next unless key && value
-      
+
       key = key_map[key] || key
       info[key] = value
     end
   end
-  
+
   # Query the status of one or more jobs in Grid Engine using 'qstat'.
   # It retrieves job details such as submission time, partition, and status.
   def query(jobs, bin = nil, bin_overrides = nil, ssh_wrapper = nil)
@@ -106,7 +106,7 @@ class Sge < Scheduler
     # 3114550 0.55207 a.sh uy04992     t 02/08/2025 15:26:23 prior@r13n9               80 1
     # 3114550 0.55207 a.sh uy04992     t 02/08/2025 15:26:23 prior@r13n9               80 2
     # 3114550 0.00000 a.sh uy04992    qw 02/08/2025 15:26:21                      80 3-10:1
-   
+
     # Queued of Single Job
     # job-ID  prior   name user    state submit/start at    queue  jclass  slots ja-task-ID
     # -------------------------------------------------------------------------------------
@@ -132,15 +132,15 @@ class Sge < Scheduler
       jobs.each do |job_id|
         # Determine if the job is an array job or a single job
         base_id, task_id = job_id.include?(".") ? job_id.split('.') : [job_id, nil]
-        
+
         # Process each line of the qstat output
         formatted_stdout1.each_line do |line|
           columns = line.split(/\s+/)
           next unless columns[0] == base_id
-          
+
           # Get job information
           job_name, job_partition, job_status_id = get_job_info(columns)
-          
+
           # Handle array job task matching or single job processing
           if task_id # array job
             if (job_status_id == JOB_STATUS["running"] && columns[-1] == task_id) || job_status_id == JOB_STATUS["queued"]
@@ -181,7 +181,7 @@ class Sge < Scheduler
       remaining_jobs.each do |job_id|
         # For now, set the status to "Unknown".
         info[job_id] = { JOB_STATUS_ID => nil }
-        
+
         # Determine if the job is an array job or a single job
         base_id, task_id = job_id.include?(".") ? job_id.split('.') : [job_id, nil]
         job_blocks.each do |block|
@@ -201,7 +201,7 @@ class Sge < Scheduler
       remaining_jobs.each do |job_id|
         exit_status = info[job_id]["exit_status"]
         status = info[job_id][JOB_STATUS_ID]
-        
+
         # Post-processing phase:
         # If a job has a non-zero exit_status and is marked as "completed",
         # we treat it as a failed job and update its status accordingly.
@@ -209,7 +209,7 @@ class Sge < Scheduler
           info[job_id][JOB_STATUS_ID] = JOB_STATUS["failed"]
         end
       end
-      
+
     end
     return info, nil
   rescue Exception => e

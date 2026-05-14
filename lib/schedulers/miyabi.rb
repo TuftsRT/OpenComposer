@@ -20,10 +20,10 @@ class Miyabi < Pbspro
     # U : Job is suspended due to workstation becoming busy
     # W : Job is waiting for its requested execution time to be reached or job specified a stagein request which failed for some reason.
     # X : Subjobs only; subjob is finished (expired.)
-                               
+
     qstat = get_command_path("qstat", bin, bin_overrides)
 
-    # Try to get info for running jobs 
+    # Try to get info for running jobs
     command = [ssh_wrapper, qstat, "-f -t", jobs.join(" ")].compact.join(" ")
     stdout1, stderr1, status1 = Open3.capture3(command)
     return nil, [stdout1, stderr1].join(" ") unless status1.success?
@@ -37,7 +37,7 @@ class Miyabi < Pbspro
     command = [ssh_wrapper, qstat, "-f -t -H --hday 7", remaining_jobs.join(" ")].compact.join(" ")
     stdout2, stderr2, status2 = Open3.capture3(command)
     return nil, [stdout2, stderr2].join(" ") unless status2.success?
-  
+
     parse_qstat_output(stdout2, info)
     return info, nil
   rescue Exception => e

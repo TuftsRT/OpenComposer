@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.0.0] - 2026-05-11
+### Add
+- Add side-by-side syntax highlighting overlays for the script and submit textareas.
+- Add configurable `highlight_theme` and `directive_color` settings for history/script highlighting.
+- Add advanced history search options for date range, AND/OR matching, and field selection.
+- Add history search elapsed-time output next to the entry count.
+
+### Changed
+- Change history storage from PStore to SQLite with automatic migration from legacy `.db` files.
+- Expand history search to index all stored job values, including Job Details and Job Script contents.
+- Improve history search highlighting so it follows AND/OR search terms and the selected field.
+
+## Fix
+- Fix initialization error in Dynamic Form Widget
+
 ## [1.9.0] - 2026-03-20
 ### Add
 - A warning will be displayed before manual changes to the script and submit sections are deleted.

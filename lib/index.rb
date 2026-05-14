@@ -3,7 +3,7 @@ require "uri"
 # Return true if the provided icon is in a valid URL format.
 def valid_url?(icon)
   return false if icon.nil? || (!icon.start_with?("http://") && !icon.start_with?("https://"))
-  
+
   uri = URI.parse(icon)
   return uri.is_a?(URI::HTTP) || uri.is_a?(URI::HTTPS)
 rescue URI::InvalidURIError => e
@@ -30,7 +30,7 @@ def get_icon_path(dirname, icon)
                   URI.join(url, "no_image_square.jpg")
                 end
               end
-  
+
   [is_bi_or_fa_icon, icon_path]
 end
 
