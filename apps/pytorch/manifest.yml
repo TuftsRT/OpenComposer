@@ -1,0 +1,6 @@
+---
+name: PyTorch
+category: Applications
+icon: fa-solid fa-brain
+description: |
+  This application generates a PyTorch training job script for GPU partitions.

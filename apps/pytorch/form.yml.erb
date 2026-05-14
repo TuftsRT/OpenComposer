@@ -1,0 +1,178 @@
+<%-
+require 'shellwords'
+
+eval(ERB.new(File.read('./partials/slurm_discovery.erb'), trim_mode: '-').result(binding))
+
+partition_options = generate_oc_partition_options(:gpu)
+gpu_options = generate_oc_gpu_options
+gpu_data = gpu_data_attributes
+
+if @dynamic_failed || partition_options.nil? || partition_options.empty?
+  partition_options = default_gpu_partition_options
+  gpu_options = default_gpu_type_options
+end
+
+initial_gpu_max = @global_max_gpus || 1
+default_email = "#{ENV['USER'] || 'user'}@tufts.edu"
+
+def discover_module_versions(module_name)
+  cmd = %(bash -lc 'module -t avail #{Shellwords.escape(module_name)} 2>&1')
+  output = `#{cmd}`
+  return [] unless $?.success? || !output.to_s.strip.empty?
+
+  output.each_line
+        .map(&:strip)
+        .grep(/^#{Regexp.escape(module_name)}\//)
+        .map { |line| line.split('/', 2).last }
+        .reject(&:empty?)
+        .uniq
+        .sort_by { |value| value.split(/[^0-9A-Za-z]+/) }
+end
+
+version_options = discover_module_versions('pytorch').reverse.map { |version| [version] }
+version_options = [["No pytorch modules found", ""]] if version_options.empty?
+-%>
+---
+form:
+  partition:
+    widget: select
+    label: Partition
+<% if !@dynamic_failed -%>
+    data:
+      partition-gpu-max-cores: '<%= gpu_data[:cores] %>'
+      partition-gpu-max-memory: '<%= gpu_data[:memory] %>'
+      partition-max-hours: '<%= gpu_data[:hours] %>'
+      partition-gpu-options: '<%= gpu_data[:gpu_options] %>'
+      unavailable-gpus: '<%= gpu_data[:unavailable] %>'
+      gres-map: '<%= gpu_data[:gres_map] %>'
+      partition-gpu-max-gpus: '<%= gpu_data[:max_gpus] %>'
+<% end -%>
+    options:
+<% partition_options.each do |opt| -%>
+      - <%= to_yaml_flow(opt) %>
+<% end -%>
+
+  cores_memory:
+    widget: number
+    label: [Number of cores, Memory]
+    size: 2
+    value: [1, 4]
+
+  gpu_type:
+    widget: select
+    label: GPU Arch
+<% if @dynamic_failed -%>
+    help: "SLURM GPU discovery is unavailable. The fallback configuration requests any available GPU."
+<% else -%>
+    help: "Auto-detected GPU types from Slurm. Choose 'any' if you do not have a preference."
+<% end -%>
+    options:
+<% gpu_options.each do |opt| -%>
+      - <%= to_yaml_flow(opt) %>
+<% end -%>
+
+  gpus:
+    widget: number
+    label: Number of GPUs (1 - <%= initial_gpu_max %>)
+    value: 1
+    min: 1
+    max: <%= initial_gpu_max %>
+    step: 1
+
+  time:
+    widget: number
+    label: [Max run time hours (0 - 24), Max run minutes (0 - 59)]
+    size: 2
+    value: [1, 0]
+    min: [0, 0]
+    max: [24, 59]
+    step: [1, 1]
+
+  version:
+    label: PyTorch Version
+    widget: select
+    options:
+<% version_options.each do |opt| -%>
+      - <%= to_yaml_flow(opt) %>
+<% end -%>
+
+  launch_mode:
+    label: Launch Mode
+    widget: radio
+    value: python
+    options:
+      - ["python", python]
+      - ["torchrun", torchrun]
+
+  script_path:
+    widget: path
+    required: true
+    label: Training Script
+    help: |
+      Path to the Python training script to run.
+
+  script_args:
+    widget: text
+    required: false
+    label: Script Arguments
+    help: |
+      Optional command-line arguments passed to the training script.
+
+  show_mail_option:
+    widget: checkbox
+    label:
+    options:
+      - ["Mail Notifications", "", show-email, show-mail_option ]
+
+  mail_option:
+    label: Mail option
+    widget: checkbox
+    direction: horizontal
+    separator: ","
+    indent: 1
+    options:
+      - [ "Beginning of job execution", 'BEGIN',   enable-email ]
+      - [ "End of job execution",       'END',     enable-email ]
+      - [ "Fail of job",                'FAIL',    enable-email ]
+      - [ "When the job is requeued",   'REQUEUE', enable-email ]
+      - [ "All",                        'ALL',     enable-email ]
+
+  email:
+    widget: email
+    label: Email
+    value: <%= default_email %>
+    indent: 2
+
+script: |
+  #!/bin/bash
+  #SBATCH -p #{partition}
+  #SBATCH -N 1
+  #SBATCH -n #{cores_memory_1}
+  #SBATCH --mem #{cores_memory_2}G
+  #SBATCH -t #{time_1}:#{time_2}:00
+  #SBATCH --gres=gpu:#{:gpu_type_1}#{gpus}
+  #{gpu_type_2}
+  #SBATCH --mail-user=#{email}
+  #SBATCH --mail-type=#{mail_option}
+  #SBATCH --error=%x-%J-%u.err
+  #SBATCH --output=%x-%J-%u.out
+
+  set -euo pipefail
+
+  module load pytorch/#{version}
+
+  export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-#{cores_memory_1}}"
+
+  if command -v nvidia-smi >/dev/null 2>&1; then
+    nvidia-smi
+  fi
+
+  if [ "#{launch_mode}" = "torchrun" ]; then
+    torchrun --nproc_per_node=#{gpus} "#{script_path}" #{script_args}
+  else
+    python "#{script_path}" #{script_args}
+  fi
+
+check: |
+  halt 500, "No PyTorch software version is available." if @version.to_s.strip.empty?
+  halt 500, "Training script is required." if @script_path.to_s.strip.empty?
