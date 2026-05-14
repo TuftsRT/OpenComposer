@@ -322,13 +322,22 @@ helpers do
       return "  selectedValues.push('#{line}');\n"
     end
   end
-    
+
+
+  # Output data-* attributes from a value's 'data' hash.
+  def output_data_attrs(value)
+    return "" unless value.is_a?(Hash) && value.key?('data')
+    value['data'].map { |k, v| "data-#{k}=\"#{escape_html(v.to_s)}\"" }.join(" ")
+  end
+
   # Output a select widget.
   def output_select_html(key, value, script_content, submit_content, app_name, dir_name)
     return "" if value['options'].nil?
 
+    data_attrs = output_data_attrs(value)
+    data_str = data_attrs.empty? ? "" : " #{data_attrs}"
     html = output_label_with_span_tag(key, value)
-    html += "<select tabindex=\"#{@table_index}\" id=\"#{key}\" name=\"#{key}\" class=\"form-select\" "
+    html += "<select tabindex=\"#{@table_index}\" id=\"#{key}\" name=\"#{key}\" class=\"form-select\"#{data_str} "
     script_flag = references_key_or_has_flag?(key, value['options'], script_content, app_name, dir_name)
     submit_flag = references_key_or_has_flag?(key, value['options'], submit_content, app_name, dir_name)
     type = if script_flag && submit_flag

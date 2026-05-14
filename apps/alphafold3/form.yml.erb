@@ -1,0 +1,344 @@
+<%-
+require 'shellwords'
+
+# Include SLURM discovery partial (provides helpers + dynamic resource data)
+eval(ERB.new(File.read('./partials/slurm_discovery.erb'), trim_mode: '-').result(binding))
+
+# Build partition + GPU options; fall back to generic defaults if discovery fails.
+partition_options = generate_oc_partition_options(:gpu)
+gpu_options = generate_oc_gpu_options
+gpu_data = gpu_data_attributes
+
+if @dynamic_failed || partition_options.nil? || partition_options.empty?
+  partition_options = default_gpu_partition_options
+  gpu_options = default_gpu_type_options
+end
+
+initial_gpu_max = @global_max_gpus || 1
+
+def discover_module_versions(module_name)
+  cmd = %(bash -lc 'module -t avail #{Shellwords.escape(module_name)} 2>&1')
+  output = `#{cmd}`
+  return [] unless $?.success? || !output.to_s.strip.empty?
+
+  output.each_line
+        .map(&:strip)
+        .grep(/^#{Regexp.escape(module_name)}\//)
+        .map { |line| line.split('/', 2).last }
+        .reject(&:empty?)
+        .uniq
+        .sort_by { |value| value.split(/[^0-9A-Za-z]+/) }
+end
+
+version_options = discover_module_versions('alphafold3').reverse.map { |version| [version] }
+version_options = [["No alphafold3 modules found", ""]] if version_options.empty?
+-%>
+---
+form:
+  partition:
+    widget: select
+    label: Partition
+<% if !@dynamic_failed -%>
+    data:
+      partition-gpu-max-cores: '<%= gpu_data[:cores] %>'
+      partition-gpu-max-memory: '<%= gpu_data[:memory] %>'
+      partition-max-hours: '<%= gpu_data[:hours] %>'
+      partition-gpu-options: '<%= gpu_data[:gpu_options] %>'
+      unavailable-gpus: '<%= gpu_data[:unavailable] %>'
+      gres-map: '<%= gpu_data[:gres_map] %>'
+      partition-gpu-max-gpus: '<%= gpu_data[:max_gpus] %>'
+<% end -%>
+    options:
+<% partition_options.each do |opt| -%>
+      - <%= to_yaml_flow(opt) %>
+<% end -%>
+
+  cores_memory:
+    widget: number
+    label: [Number of cores, Memory]
+    size: 2
+    value: [1, 4]
+
+  gpu_type:
+    widget: select
+    label: GPU Arch
+<% if @dynamic_failed -%>
+    help: "SLURM GPU discovery is unavailable. The fallback configuration requests any available GPU."
+<% else -%>
+    help: "Auto-detected GPU types from Slurm. Choose 'any' if you do not have a preference."
+<% end -%>
+    options:
+<% gpu_options.each do |opt| -%>
+      - <%= to_yaml_flow(opt) %>
+<% end -%>
+
+  gpus:
+    widget: number
+    label: Number of GPUs (1 - <%= initial_gpu_max %>)
+    value: 1
+    min: 1
+    max: <%= initial_gpu_max %>
+    step: 1
+
+  time:
+    widget: number
+    label: [Max run time hours (0 - 24), Max run minutes (0 - 59)]
+    size: 2
+    value: [1, 0]
+    min: [0, 0]
+    max: [24, 59]
+    step: [1, 1]
+
+  version:
+    label: Software Version
+    widget: select
+    options:
+<% version_options.each do |opt| -%>
+      - <%= to_yaml_flow(opt) %>
+<% end -%>
+
+  json_path:
+    widget: path
+    required: false
+    label: json_path
+    help: |
+      Path to a single AlphaFold 3 input JSON file. Provide either this or input_dir.
+
+  input_dir:
+    widget: path
+    required: false
+    label: input_dir
+    help: |
+      Path to a directory of AlphaFold 3 input JSON files. Provide either this or json_path.
+
+  output_dir:
+    widget: path
+    required: yes
+    label: output_dir
+
+  db_dir:
+    widget: path
+    required: true
+    label: db_dir
+    help: |
+      Path to the AlphaFold 3 public databases directory for your site.
+
+  model_dir:
+    widget: path
+    required: true
+    label: model_dir
+    help: |
+      Path to the AlphaFold 3 model parameters directory for your site.
+
+  max_template_date:
+    label: max_template_date
+    widget: text
+    value: "2021-09-30"
+    help: |
+      Maximum template release date to consider. Format: YYYY-MM-DD.
+
+  show_mail_option:
+    widget: checkbox
+    label:
+    options:
+      - ["Mail Notifications", "", show-mail_option, show-email]
+
+  show_array_option:
+    widget: checkbox
+    label:
+    options:
+      - ["Array Job", "", show-array ]
+
+  show_runtime_option:
+    widget: checkbox
+    label:
+    options:
+      - [
+          "Runtime Options",
+          "",
+          show-run_data_pipeline,
+          show-run_inference,
+          show-num_diffusion_samples,
+          show-num_recycles,
+          show-num_seeds,
+          show-conformer_max_iterations,
+          show-log,
+        ]
+
+  run_inference:
+    label: run_inference
+    widget: radio
+    value: true
+    options:
+      - ["true", true]
+      - ["false", false]
+    help: |
+      Whether to run model inference. This stage requires a GPU.
+
+  run_data_pipeline:
+    label: run_data_pipeline
+    widget: radio
+    value: true
+    options:
+      - ["true", true]
+      - ["false", false]
+    help: |
+      Whether to run the data pipeline, including genetic and template search.
+
+  num_diffusion_samples:
+    label: num_diffusion_samples
+    widget: number
+    min: 1
+    step: 1
+    required: false
+
+  num_recycles:
+    label: num_recycles
+    widget: number
+    min: 1
+    step: 1
+    required: false
+
+  num_seeds:
+    label: num_seeds
+    widget: number
+    min: 1
+    step: 1
+    required: false
+
+  conformer_max_iterations:
+    label: conformer_max_iterations
+    widget: number
+    min: 1
+    step: 1
+    required: false
+
+  mail_option:
+    label: Mail option
+    widget: checkbox
+    direction: horizontal
+    separator: ","
+    indent: 1
+    options:
+      - ["Beginning of job execution", "BEGIN", enable-email]
+      - ["End of job execution", "END", enable-email]
+      - ["Fail of job", "FAIL", enable-email]
+      - ["When the job is requeued", "REQUEUE", enable-email]
+      - ["All", "ALL", enable-email]
+
+  email:
+    widget: email
+    label: Email
+    indent: 2
+
+  array:
+    widget: number
+    label: [ Array Job (start index), Array Job (last index) ]
+    size: 2
+    indent: 1
+    min: [0, 0]
+    help: Each job executed from an array job is assigned a task ID, which can be referenced via `SLURM_ARRAY_TASK_ID`.
+
+script: |
+  #!/bin/bash
+  #SBATCH -p #{partition}
+  #SBATCH -n #{cores_memory_1}
+  #SBATCH --mem #{cores_memory_2}G
+  #SBATCH -t #{time_1}:#{time_2}:00
+  #SBATCH --array=#{array_1}-#{array_2}
+  #SBATCH --gres=gpu:#{:gpu_type_1}#{gpus}
+  #{gpu_type_2}
+  #SBATCH --mail-user=#{email}
+  #SBATCH --mail-type=#{mail_option}
+  #SBATCH --error=%x-%J-%u.err
+  #SBATCH --output=%x-%J-%u.out
+
+  set -euo pipefail
+
+  module load alphafold3/#{version}
+
+  export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-#{cores_memory_1}}"
+
+  if command -v nvidia-smi >/dev/null 2>&1; then
+    nvidia-smi
+  fi
+
+  if [ -n "#{:json_path}" ] && [ -n "#{:input_dir}" ]; then
+    echo "Set only one of json_path or input_dir before submitting."
+    exit 1
+  fi
+
+  if [ -z "#{:json_path}" ] && [ -z "#{:input_dir}" ]; then
+    echo "Set either json_path or input_dir before submitting."
+    exit 1
+  fi
+
+  mkdir -p "#{output_dir}" || {
+    echo "Failed to create output directory: #{output_dir}"
+    exit 1
+  }
+
+  touch "#{output_dir}/.oc_write_test" || {
+    echo "Output directory is not writable from the AlphaFold 3 runtime: #{output_dir}"
+    exit 1
+  }
+  rm -f "#{output_dir}/.oc_write_test"
+
+  append_if_set() {
+    local flag="$1"
+    local value="$2"
+    if [ -n "$value" ]; then
+      af_args+=("${flag}=${value}")
+    fi
+  }
+
+  af_args=(
+    --output_dir="#{output_dir}"
+    --db_dir="#{db_dir}"
+    --model_dir="#{model_dir}"
+    --max_template_date="#{max_template_date}"
+    --run_data_pipeline="#{run_data_pipeline}"
+    --run_inference="#{run_inference}"
+  )
+
+  if [ -n "#{:json_path}" ]; then
+    af_args+=(--json_path="#{:json_path}")
+  else
+    af_args+=(--input_dir="#{:input_dir}")
+  fi
+
+  append_if_set --num_diffusion_samples "#{num_diffusion_samples}"
+  append_if_set --num_recycles "#{num_recycles}"
+  append_if_set --num_seeds "#{num_seeds}"
+  append_if_set --conformer_max_iterations "#{conformer_max_iterations}"
+
+  run_alphafold.py "${af_args[@]}"
+
+check: |
+  halt 500, "No AlphaFold 3 software version is available." if @version.to_s.strip.empty?
+  json_path = @json_path.to_s.strip
+  input_dir = @input_dir.to_s.strip
+
+  if json_path.empty? && input_dir.empty?
+    halt 500, "Set either json_path or input_dir."
+  end
+
+  if !json_path.empty? && !input_dir.empty?
+    halt 500, "Set only one of json_path or input_dir."
+  end
+
+  array_start = @array_1.to_s.strip
+  array_end = @array_2.to_s.strip
+  array_unused = [array_start, array_end].all? { |value| value.empty? || value.to_i == 0 }
+
+  unless array_unused
+    if array_start.empty? ^ array_end.empty?
+      halt 500, "Both array job start and end must be provided."
+    end
+
+    unless array_start.empty?
+      halt 500, "Array job start must be greater than 0." if @array_1.to_i <= 0
+      halt 500, "Array job end must be greater than 0." if @array_2.to_i <= 0
+      halt 500, "Array job end must be greater than or equal to start." if @array_2.to_i < @array_1.to_i
+    end
+  end

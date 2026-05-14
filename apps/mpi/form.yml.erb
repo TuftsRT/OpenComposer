@@ -1,0 +1,101 @@
+<%-
+# Include SLURM discovery partial (provides helpers + dynamic resource data)
+eval(ERB.new(File.read('./partials/slurm_discovery.erb'), trim_mode: '-').result(binding))
+
+# Build CPU partition options dynamically when available.
+partition_options = generate_oc_partition_options(:cpu) || default_cpu_partition_options
+cpu_dynamic = !partition_options.empty?
+partition_options = default_cpu_partition_options unless cpu_dynamic
+default_email = "#{ENV['USER']}@tufts.edu"
+-%>
+---
+form:
+  partition:
+    widget: select
+    label: Partition
+<% if cpu_dynamic -%>
+    data:
+      slurm-discovery: 'cpu'
+<% end -%>
+    options:
+<% partition_options.each do |opt| -%>
+      - <%= to_yaml_flow(opt) %>
+<% end -%>
+
+  nodes:
+    widget: number
+    label: Number of nodes
+    value: 1
+    min: 1
+    step: 1
+
+  tasks_cpus_memory:
+    widget: number
+    label: [Tasks per node, CPUs per task, Memory per node (GB)]
+    size: 3
+    value: [1, 1, 4]
+    min: [1, 1, 1]
+    step: [1, 1, 1]
+
+  time:
+    widget: number
+    label: [Max run time hours (0 - 24), Max run minutes (0 - 59)]
+    size: 2
+    value: [1, 0]
+    min: [0, 0]
+    max: [24, 59]
+    step: [1, 1]
+
+  show_mail_option:
+    widget: checkbox
+    label:
+    options:
+      - ["Mail Notifications", "", show-email, show-mail_option ]
+
+  mail_option:
+    label: Mail option
+    widget: checkbox
+    direction: horizontal
+    separator: ","
+    indent: 1
+    options:
+      - [ "Beginning of job execution", 'BEGIN',   enable-email ]
+      - [ "End of job execution",       'END',     enable-email ]
+      - [ "Fail of job",                'FAIL',    enable-email ]
+      - [ "When the job is requeued",   'REQUEUE', enable-email ]
+      - [ "All",                        'ALL',     enable-email ]
+
+  email:
+    widget: email
+    label: Email
+    value: <%= default_email %>
+    indent: 2
+
+script: |
+  #!/bin/bash
+  #SBATCH -p #{partition}
+  #SBATCH -N #{nodes}
+  #SBATCH --ntasks-per-node=#{tasks_cpus_memory_1}
+  #SBATCH --cpus-per-task=#{tasks_cpus_memory_2}
+  #SBATCH --mem=#{tasks_cpus_memory_3}G
+  #SBATCH -t #{time_1}:#{time_2}:00
+  #SBATCH --mail-user=#{email}
+  #SBATCH --mail-type=#{mail_option}
+  #SBATCH --error=%x-%J-%u.err
+  #SBATCH --output=%x-%J-%u.out
+
+  set -euo pipefail
+
+  export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-#{tasks_cpus_memory_2}}"
+
+  # Add your MPI workload below.
+  # Example:
+  # module load openmpi
+  # srun ./my_mpi_program
+  # mpirun -np "${SLURM_NTASKS}" ./my_mpi_program
+
+check: |
+  halt 500, "Number of nodes must be at least 1." if @nodes.to_i < 1
+  halt 500, "Tasks per node must be greater than 0." if @tasks_cpus_memory_1.to_i <= 0
+  halt 500, "CPUs per task must be greater than 0." if @tasks_cpus_memory_2.to_i <= 0
+  halt 500, "Memory per node must be greater than 0." if @tasks_cpus_memory_3.to_i <= 0

@@ -1,0 +1,115 @@
+<%-
+# Include SLURM discovery partial (provides helpers + dynamic resource data)
+eval(ERB.new(File.read('./partials/slurm_discovery.erb'), trim_mode: '-').result(binding))
+
+# Build partition options; fall back to static defaults if SLURM discovery returned nothing.
+# NOTE: Do NOT gate on @dynamic_failed — that flag tracks GPU detection,
+# which is irrelevant for CPU. Only check if partition_options came back empty.
+partition_options = generate_oc_partition_options(:cpu) || default_cpu_partition_options
+cpu_dynamic = !partition_options.empty?
+partition_options = default_cpu_partition_options unless cpu_dynamic
+-%>
+---
+form:
+  partition:
+    widget: select
+    label: Partition
+<% if cpu_dynamic -%>
+    data:
+      slurm-discovery: 'cpu'
+<% end -%>
+    options:
+<% partition_options.each do |opt| -%>
+      - <%= to_yaml_flow(opt) %>
+<% end -%>
+
+  cores_memory:
+    widget: number
+    label: [Number of cores, Memory]
+    size:  2
+    value: [ 1, 4 ]
+
+  time:
+    widget:   number
+    label:    [ Max run time hours (0 - 24), Max run minutes (0 - 59) ]
+    size:     2
+    value:    [  1,  0 ]
+    min:      [  0,  0 ]
+    max:      [ 24, 59 ]
+    step:     [  1,  1 ]
+
+  show_mail_option:
+    widget: checkbox
+    label:
+    options:
+      - ["Mail Notifications", "", show-email, show-mail_option ]
+
+  show_array_option:
+    widget: checkbox
+    label:
+    options:
+      - ["Array Job", "", show-array ]
+
+  mail_option:
+    label: Mail option
+    widget: checkbox
+    direction: horizontal
+    separator: ","
+    indent: 1
+    options:
+      - [ "Beginning of job execution", 'BEGIN',   enable-email ]
+      - [ "End of job execution",       'END',     enable-email ]
+      - [ "Fail of job",                'FAIL',    enable-email ]
+      - [ "When the job is requeued",   'REQUEUE', enable-email ]
+      - [ "All",                        'ALL',     enable-email ]
+
+  email:
+    widget: email
+    label:  Email
+    indent: 2
+
+  array:
+    widget: number
+    label: [ Array Job (start index), Array Job (last index) ]
+    size: 2
+    indent: 1
+    min:  [0, 0]
+    help: Each job executed from an array job is assigned a task ID, which can be referenced in the shell script via the environment variable SLURM_ARRAY_TASK_ID.
+
+script: |
+  #!/bin/bash
+  #SBATCH -p #{partition}
+  #SBATCH -N 1
+  #SBATCH -n #{cores_memory_1}
+  #SBATCH --mem #{cores_memory_2}G
+  #SBATCH -t #{time_1}:#{time_2}:00
+  #SBATCH --array=#{array_1}-#{array_2}
+  #SBATCH --mail-user=#{email}
+  #SBATCH --mail-type=#{mail_option}
+  #SBATCH --error=%x-%J-%u.err
+  #SBATCH --output=%x-%J-%u.out
+
+  set -euo pipefail
+
+  export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-#{cores_memory_1}}"
+  # Add your CPU workload below.
+  # Example:
+  # module load <module>
+  # python script.py
+
+check: |
+  array_start = @array_1.to_s.strip
+  array_end = @array_2.to_s.strip
+  array_unused = [array_start, array_end].all? { |value| value.empty? || value.to_i == 0 }
+
+  unless array_unused
+    if array_start.empty? ^ array_end.empty?
+      halt 500, "Both array job start and end must be provided."
+    end
+
+    unless array_start.empty?
+      halt 500, "Array job start must be greater than 0." if @array_1.to_i <= 0
+      halt 500, "Array job end must be greater than 0." if @array_2.to_i <= 0
+      halt 500, "Array job end must be greater than or equal to start." if @array_2.to_i < @array_1.to_i
+    end
+  end

@@ -1,0 +1,6 @@
+---
+name: PyTorch
+category: Applications
+icon: https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTHcUkxxoqts_eZWuOO6Hb-BA0k-b5L6BYXkg&s
+description: |
+  This application generates a PyTorch training job script for GPU partitions.
