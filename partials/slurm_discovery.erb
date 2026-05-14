@@ -24,11 +24,10 @@ end
 
 # Parsing the SLURM output
 @detected_types = Set.new
-@a100_sizes     = Set.new # values: 'a100_40', 'a100_80'
+@detected_gres_names = Set.new
 
 # Per-partition tracking
 @detected_by_partition    = Hash.new { |h, k| h[k] = Set.new }
-@a100_sizes_by_partition  = Hash.new { |h, k| h[k] = Set.new }
 
 # Core/CPU tracking per partition AND GPU type
 @max_cores_by_partition_and_gpu   = Hash.new { |h, k| h[k] = Hash.new(0) }
@@ -98,20 +97,24 @@ end
 # Parse node information
 @nodes_out.each_line do |line|
   # Gres=gpu:<type>:<count>
-  if (m = line.match(/\bGres=gpu:(\w+)/))
+  if (m = line.match(/\bGres=gpu:([[:alnum:]_.-]+)/))
     type = m[1]
     if type && type != 'null'
       @detected_types << type
+      @detected_gres_names << type
     end
   end
 
-  # Features fields may contain capacity hints like a100-40G / a100-80G
+  # Features may contain GPU-specific variants such as a100-40G / a100-80G.
   feats_available = line[/\bAvailableFeatures=(\S+)/, 1]
   feats_active    = line[/\bActiveFeatures=(\S+)/, 1]
   feats_legacy    = line[/\bFeature(?:s)?=(\S+)/, 1]
-  feats = [feats_available, feats_active, feats_legacy].compact.join(',')
-  @a100_sizes << 'a100_40' if feats.include?('a100-40G')
-  @a100_sizes << 'a100_80' if feats.include?('a100-80G')
+  feature_tokens = [feats_available, feats_active, feats_legacy]
+                   .compact
+                   .flat_map { |value| value.split(',') }
+                   .uniq
+  gpu_feature_variants = feature_tokens.select { |token| token.match?(/\A[[:alnum:]_.+]+-\d+[[:alpha:]]+\z/) }
+  gpu_feature_variants.each { |variant| @detected_types << variant }
 
   # Extract node state for availability tracking
   node_state = line[/\bState=(\S+)/, 1]
@@ -140,19 +143,14 @@ end
   # Determine GPU type(s) for this node
   gpu_types_on_node = Set.new
 
-  if (m = line.match(/\bGres=gpu:(\w+)/))
+  if (m = line.match(/\bGres=gpu:([[:alnum:]_.-]+)/))
     gpu_type = m[1]
     if gpu_type && gpu_type != 'null'
       gpu_types_on_node << gpu_type
     end
   end
 
-  if feats.include?('a100-40G')
-    gpu_types_on_node << 'a100_40'
-  end
-  if feats.include?('a100-80G')
-    gpu_types_on_node << 'a100_80'
-  end
+  gpu_feature_variants.each { |variant| gpu_types_on_node << variant }
 
   if gpu_types_on_node.empty?
     gpu_types_on_node << 'none'
@@ -188,22 +186,29 @@ end
     end
   end
 
-  # Record per-partition A100 sizes
-  if feats.include?('a100-40G')
-    parts.each { |p| @a100_sizes_by_partition[p] << 'a100_40' }
+  gpu_feature_variants.each do |variant|
+    parts.each { |p| @detected_by_partition[p] << variant }
   end
-  if feats.include?('a100-80G')
-    parts.each { |p| @a100_sizes_by_partition[p] << 'a100_80' }
-  end
+end
+
+# If a partition has feature variants like a100-40G/a100-80G, prefer them over the
+# generic base GPU id (a100) for display and selection.
+variant_bases = @detected_types
+  .select { |gpu_type| gpu_type.include?('-') }
+  .map { |gpu_type| gpu_type.split('-', 2).first }
+  .to_set
+
+@detected_types.subtract(variant_bases)
+@detected_by_partition.each_value do |types|
+  local_variant_bases = types
+    .select { |gpu_type| gpu_type.include?('-') }
+    .map { |gpu_type| gpu_type.split('-', 2).first }
+    .to_set
+  types.subtract(local_variant_bases)
 end
 
 # Flag if dynamic discovery failed (no types detected)
 @dynamic_failed = @detected_types.empty?
-
-# If we know specific A100 sizes, prefer those over a generic 'a100'
-if !@a100_sizes.empty?
-  @detected_types.delete('a100')
-end
 
 # Determine which GPU types are completely unavailable (all nodes down/drained)
 @unavailable_gpu_types = Set.new
@@ -213,41 +218,28 @@ end
   end
 end
 
-# Human-friendly labels for known GPU types
-@label_map = {
-  'h200'        => 'H200 - 140GB',
-  'h100'        => 'H100 - 80GB',
-  'a100'        => 'A100',
-  'a100_40'     => 'A100 - 40GB',
-  'a100_80'     => 'A100 - 80GB',
-  'l40s'        => 'L40S - 48GB',
-  'l40'         => 'L40 - 48GB',
-  'rtx_6000ada' => 'RTX 6000Ada - 48GB',
-  'rtx_a6000'   => 'RTX A6000 - 48GB',
-  'rtx_6000'    => 'RTX 6000 - 24GB',
-  'v100'        => 'v100 - 16GB',
-  'p100'        => 'P100 - 16GB',
-  't4'          => 'T4 - 16GB'
-}
+# Zero-maintenance GPU labels derived directly from SLURM identifiers.
+# This avoids keeping a static map in sync as new GPU types are added.
+def gpu_display_label(gpu_type)
+  return gpu_type if gpu_type.nil? || gpu_type.empty?
 
-# Preferred display order
-order = %w[h200 h100 a100_80 a100_40 a100 l40s l40 rtx_6000ada rtx_a6000 rtx_6000 v100 p100 t4]
-priority = order.each_with_index.to_h
+  parts = gpu_type.split(/[-_]/)
+  return gpu_type.upcase if parts.empty?
+
+  ([parts.first.upcase] + parts.drop(1)).join(' ')
+end
 
 # Cluster-wide default options
 @options = []
-if @detected_types.empty? && @a100_sizes.empty?
+if @detected_types.empty?
   @options << ['none', 'none']
 else
   @options << ['any', 'any']
-  @options << [@label_map['a100_40'], 'a100_40'] if @a100_sizes.include?('a100_40')
-  @options << [@label_map['a100_80'], 'a100_80'] if @a100_sizes.include?('a100_80')
 
   remaining = @detected_types.to_a
-  remaining.sort_by! { |t| priority.fetch(t, 999) }
+  remaining.sort_by! { |t| gpu_display_label(t) }
   remaining.each do |t|
-    next if %w[a100_40 a100_80].include?(t)
-    label = @label_map[t] || t.upcase
+    label = gpu_display_label(t)
     @options << [label, t]
   end
 end
@@ -255,36 +247,25 @@ end
 # Build partition-aware options map
 @partition_options_map = {}
 
-build_opts = lambda do |types_set, a100_size_set|
+build_opts = lambda do |types_set|
   local = []
-  if types_set.empty? && a100_size_set.empty?
+  if types_set.empty?
     local << ['none', 'none']
   else
     local << ['any', 'any']
-    if a100_size_set.include?('a100_40')
-      local << [@label_map['a100_40'], 'a100_40']
-    end
-    if a100_size_set.include?('a100_80')
-      local << [@label_map['a100_80'], 'a100_80']
-    end
     remaining_local = types_set.to_a
-    if !a100_size_set.empty?
-      remaining_local.delete('a100')
-    end
-    remaining_local.sort_by! { |t| priority.fetch(t, 999) }
+    remaining_local.sort_by! { |t| gpu_display_label(t) }
     remaining_local.each do |t|
-      next if %w[a100_40 a100_80].include?(t)
-      label = @label_map[t] || t.upcase
+      label = gpu_display_label(t)
       local << [label, t]
     end
   end
   local
 end
 
-@all_partitions = (@detected_by_partition.keys + @a100_sizes_by_partition.keys).uniq
-@all_partitions = @all_partitions.select { |p| @user_partitions.include?(p) }
+@all_partitions = @detected_by_partition.keys.select { |p| @user_partitions.include?(p) }
 @all_partitions.each do |p|
-  @partition_options_map[p] = build_opts.call(@detected_by_partition[p], @a100_sizes_by_partition[p])
+  @partition_options_map[p] = build_opts.call(@detected_by_partition[p])
 end
 
 @partition_options_map['all'] = @options
@@ -319,16 +300,24 @@ all_hours = @max_hours_by_partition.values
 @max_hours_by_partition['all'] = @global_max_hours
 
 # =============================================================================
-# GRES name map: internal GPU id → [slurm_gres_name, constraint_feature]
-# SLURM gres names come from Gres=gpu:<name>, but A100 sizes are derived from
-# node features, not gres names. So a100_40/a100_80 must map back to gres "a100"
-# with a --constraint for the size.
+# GRES name map: selected GPU id → [slurm_gres_name, constraint_feature]
+# If the selected GPU id is a feature variant such as a100-80G and a base GRES
+# name (a100) exists, submit with the base GRES and add the variant as a
+# constraint. Otherwise submit using the raw GPU id as the GRES name.
 # =============================================================================
 @gres_map = {}
-@detected_types.each { |t| @gres_map[t] = [t, ''] }
-# Override A100 size variants — gres name is 'a100', size selected via constraint
-@gres_map['a100_40'] = ['a100', 'a100-40G']
-@gres_map['a100_80'] = ['a100', 'a100-80G']
+@detected_types.each do |t|
+  if t.include?('-')
+    base_gres = t.split('-', 2).first
+    if @detected_gres_names.include?(base_gres)
+      @gres_map[t] = [base_gres, t]
+    else
+      @gres_map[t] = [t, '']
+    end
+  else
+    @gres_map[t] = [t, '']
+  end
+end
 # 'any' requests any GPU without specifying type (--gres=gpu:COUNT)
 @gres_map['any'] = ['', '']
 # 'none' maps to empty (no GPU requested)
@@ -404,12 +393,7 @@ end
 
 # Static fallback GPU type options (when SLURM discovery fails)
 def default_gpu_type_options
-  [
-    ['P100', 'p100'], ['A100', 'a100_40'], ['v100', 'v100'], ['T4', 't4'],
-    ['RTX 6000', 'rtx_6000'], ['RTX A6000', 'rtx_a6000'],
-    ['RTX 6000Ada', 'rtx_6000ada'], ['L40', 'l40'], ['L40s', 'l40s'],
-    ['H100', 'h100'], ['H200', 'h200']
-  ]
+  [['any', 'any']]
 end
 
 # Build all GPU-related JSON data attribute strings for the partition select widget.
@@ -430,7 +414,7 @@ end
 def generate_oc_partition_options(mode = :gpu)
   partitions = case mode
                when :gpu
-                 @all_partitions.select { |p| !@detected_by_partition[p].empty? || !@a100_sizes_by_partition[p].empty? }
+                 @all_partitions.select { |p| !@detected_by_partition[p].empty? }
                when :cpu
                  # Exclude GPU-only partitions (where every node has a GPU).
                  # SLURM rejects CPU-only jobs on these (e.g. 'gpu', 'a100').
@@ -487,8 +471,7 @@ end
 def unavailable_gpu_map
   map = {}
   @unavailable_gpu_types.each do |gpu_type|
-    label = @label_map[gpu_type] || gpu_type.upcase
-    map[gpu_type] = label
+    map[gpu_type] = gpu_display_label(gpu_type)
   end
   map
 end
@@ -516,7 +499,6 @@ if DEBUG_SLURM_DISCOVERY
     File.open(debug_log, 'a') do |f|
       f.puts "=== #{Time.now} ==="
       f.puts "detected_types=#{@detected_types.to_a.inspect}"
-      f.puts "a100_sizes=#{@a100_sizes.to_a.inspect}"
       f.puts "user_partitions=#{@user_partitions.inspect}"
       f.puts "gpu_partitions=#{@all_partitions.inspect}"
       f.puts "partition_options_map_keys=#{@partition_options_map.keys.inspect}"
@@ -546,7 +528,6 @@ rescue => e
   @max_memory_by_partition_and_gpu ||= Hash.new { |h, k| h[k] = Hash.new(0) }
   @max_hours_by_partition          ||= Hash.new(0)
   @unavailable_gpu_types           ||= Set.new
-  @label_map ||= {}
   @gres_map  ||= {}
 
   # Define helper stubs so ERB doesn't fail

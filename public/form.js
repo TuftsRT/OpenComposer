@@ -1253,7 +1253,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     opts.forEach(function(opt, i) {
       const label = opt[0];
-      const gpuId = opt[1]; // internal identifier like 'a100_40', 'h200', etc.
+      const gpuId = opt[1]; // raw Slurm GPU id/feature like 'a100-80G', 'h200', etc.
       const gresInfo = gresMap[gpuId] || [gpuId, '']; // [slurm_gres_name, constraint]
       // Append ':' to non-empty gres names so script template produces correct format:
       // "a100:" + "1" → "gpu:a100:1" | "" + "1" → "gpu:1" (any)
@@ -1444,4 +1444,3 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('[OC-SLURM] === INITIAL RUN COMPLETE ===');
   }, 100);
 });
-
