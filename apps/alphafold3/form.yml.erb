@@ -1,4 +1,6 @@
 <%-
+require 'shellwords'
+
 # Include SLURM discovery partial (provides helpers + dynamic resource data)
 eval(ERB.new(File.read('./partials/slurm_discovery.erb'), trim_mode: '-').result(binding))
 
@@ -13,6 +15,23 @@ if @dynamic_failed || partition_options.nil? || partition_options.empty?
 end
 
 initial_gpu_max = @global_max_gpus || 1
+
+def discover_module_versions(module_name)
+  cmd = %(bash -lc 'module -t avail #{Shellwords.escape(module_name)} 2>&1')
+  output = `#{cmd}`
+  return [] unless $?.success? || !output.to_s.strip.empty?
+
+  output.each_line
+        .map(&:strip)
+        .grep(/^#{Regexp.escape(module_name)}\//)
+        .map { |line| line.split('/', 2).last }
+        .reject(&:empty?)
+        .uniq
+        .sort_by { |value| value.split(/[^0-9A-Za-z]+/) }
+end
+
+version_options = discover_module_versions('alphafold3').reverse.map { |version| [version] }
+version_options = [["No alphafold3 modules found", ""]] if version_options.empty?
 -%>
 ---
 form:
@@ -74,8 +93,9 @@ form:
     label: Software Version
     widget: select
     options:
-      - ["3.0.0"]
-      - ["3.0.1"]
+<% version_options.each do |opt| -%>
+      - <%= to_yaml_flow(opt) %>
+<% end -%>
 
   json_path:
     widget: path
@@ -275,6 +295,8 @@ script: |
   run_alphafold.py "${af_args[@]}"
 
 check: |
+  halt 500, "No AlphaFold 3 software version is available." if @version.to_s.strip.empty?
+
   array_start = @array_1.to_s.strip
   array_end = @array_2.to_s.strip
   array_unused = [array_start, array_end].all? { |value| value.empty? || value.to_i == 0 }
