@@ -263,30 +263,26 @@ script: |
     nvidia-smi
   fi
 
-  json_path_value="#{json_path}"
-  input_dir_value="#{input_dir}"
-  output_dir_value="#{output_dir}"
-
-  if [ -n "${json_path_value}" ] && [ -n "${input_dir_value}" ]; then
+  if [ -n "#{:json_path}" ] && [ -n "#{:input_dir}" ]; then
     echo "Set only one of json_path or input_dir before submitting."
     exit 1
   fi
 
-  if [ -z "${json_path_value}" ] && [ -z "${input_dir_value}" ]; then
+  if [ -z "#{:json_path}" ] && [ -z "#{:input_dir}" ]; then
     echo "Set either json_path or input_dir before submitting."
     exit 1
   fi
 
-  mkdir -p "${output_dir_value}" || {
-    echo "Failed to create output directory: ${output_dir_value}"
+  mkdir -p "#{output_dir}" || {
+    echo "Failed to create output directory: #{output_dir}"
     exit 1
   }
 
-  touch "${output_dir_value}/.oc_write_test" || {
-    echo "Output directory is not writable from the AlphaFold 3 runtime: ${output_dir_value}"
+  touch "#{output_dir}/.oc_write_test" || {
+    echo "Output directory is not writable from the AlphaFold 3 runtime: #{output_dir}"
     exit 1
   }
-  rm -f "${output_dir_value}/.oc_write_test"
+  rm -f "#{output_dir}/.oc_write_test"
 
   append_if_set() {
     local flag="$1"
@@ -305,10 +301,10 @@ script: |
     --run_inference="#{run_inference}"
   )
 
-  if [ -n "${json_path_value}" ]; then
-    af_args+=(--json_path="${json_path_value}")
+  if [ -n "#{:json_path}" ]; then
+    af_args+=(--json_path="#{:json_path}")
   else
-    af_args+=(--input_dir="${input_dir_value}")
+    af_args+=(--input_dir="#{:input_dir}")
   fi
 
   append_if_set --num_diffusion_samples "#{num_diffusion_samples}"
