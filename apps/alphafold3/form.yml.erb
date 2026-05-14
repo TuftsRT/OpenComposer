@@ -263,10 +263,30 @@ script: |
     nvidia-smi
   fi
 
-  if [ -z "#{json_path}" ] && [ -z "#{input_dir}" ]; then
+  json_path_value="#{json_path}"
+  input_dir_value="#{input_dir}"
+  output_dir_value="#{output_dir}"
+
+  if [ -n "${json_path_value}" ] && [ -n "${input_dir_value}" ]; then
+    echo "Set only one of json_path or input_dir before submitting."
+    exit 1
+  fi
+
+  if [ -z "${json_path_value}" ] && [ -z "${input_dir_value}" ]; then
     echo "Set either json_path or input_dir before submitting."
     exit 1
   fi
+
+  mkdir -p "${output_dir_value}" || {
+    echo "Failed to create output directory: ${output_dir_value}"
+    exit 1
+  }
+
+  touch "${output_dir_value}/.oc_write_test" || {
+    echo "Output directory is not writable from the AlphaFold 3 runtime: ${output_dir_value}"
+    exit 1
+  }
+  rm -f "${output_dir_value}/.oc_write_test"
 
   append_if_set() {
     local flag="$1"
@@ -285,8 +305,12 @@ script: |
     --run_inference="#{run_inference}"
   )
 
-  append_if_set --json_path "#{json_path}"
-  append_if_set --input_dir "#{input_dir}"
+  if [ -n "${json_path_value}" ]; then
+    af_args+=(--json_path="${json_path_value}")
+  else
+    af_args+=(--input_dir="${input_dir_value}")
+  fi
+
   append_if_set --num_diffusion_samples "#{num_diffusion_samples}"
   append_if_set --num_recycles "#{num_recycles}"
   append_if_set --num_seeds "#{num_seeds}"
@@ -296,6 +320,16 @@ script: |
 
 check: |
   halt 500, "No AlphaFold 3 software version is available." if @version.to_s.strip.empty?
+  json_path = @json_path.to_s.strip
+  input_dir = @input_dir.to_s.strip
+
+  if json_path.empty? && input_dir.empty?
+    halt 500, "Set either json_path or input_dir."
+  end
+
+  if !json_path.empty? && !input_dir.empty?
+    halt 500, "Set only one of json_path or input_dir."
+  end
 
   array_start = @array_1.to_s.strip
   array_end = @array_2.to_s.strip
